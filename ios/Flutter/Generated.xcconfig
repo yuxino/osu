@@ -1,7 +1,7 @@
 // This is a generated file; do not edit or check into version control.
 FLUTTER_ROOT=/Users/gavin/Development/flutter
-FLUTTER_APPLICATION_PATH=/Users/gavin/AndroidStudioProjects/osu
-FLUTTER_TARGET=/Users/gavin/AndroidStudioProjects/osu/lib/main.dart
+FLUTTER_APPLICATION_PATH=/Users/gavin/Desktop/work/osu
+FLUTTER_TARGET=/Users/gavin/Desktop/work/osu/lib/main.dart
 FLUTTER_BUILD_DIR=build
 SYMROOT=${SOURCE_ROOT}/../build/ios
 FLUTTER_FRAMEWORK_DIR=/Users/gavin/Development/flutter/bin/cache/artifacts/engine/ios
