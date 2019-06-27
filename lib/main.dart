@@ -11,39 +11,83 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
-  final String title;
+  MyHomePage({Key key}) : super(key: key);
 
   @override
   _MyHomePageState createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  bool flag = false;
+
+  final verticalDirection = {
+    false: VerticalDirection.up,
+    true: VerticalDirection.down
+  };
+
+  final iconDirection = {
+    false: Icons.arrow_back_ios,
+    true: Icons.arrow_forward_ios
+  };
+
+  void _toggleFlag() {
+    setState(() {
+      flag = flag ? false : true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    Widget body = UnconstrainedBox(
+        child: Container(
+      width: MediaQuery.of(context).size.width,
+//      color: Colors.pink,
+      child: Column(
+        verticalDirection: verticalDirection[flag],
+        children: <Widget>[
+          Container(
+              padding: EdgeInsets.symmetric(vertical: 30),
+              child: Column(
+                children: <Widget>[
+                  TextField(
+                    cursorColor: Colors.pink,
+                    keyboardAppearance: Brightness.dark,
+                    keyboardType: TextInputType.number,
+//                    textInputAction: TextInputAction.go,
+                    decoration: InputDecoration(
+                        border: OutlineInputBorder(),
+                        labelText: 'Password',
+//                        counterText: "counterText",
+                        prefixIcon: Icon(Icons.pregnant_woman),
+                        counter: Text('asd')),
+                  )
+                ],
+              )),
+          IconButton(
+            icon: Icon(iconDirection[flag]),
+            onPressed: _toggleFlag,
+          ),
+          Container(
+              padding: EdgeInsets.symmetric(vertical: 30),
+              child: Column(
+                children: <Widget>[Text('2')],
+              )),
+        ],
+      ),
+    ));
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Text('Hello world'),
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'hello world',
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
+        child: body,
       ),
     );
   }
