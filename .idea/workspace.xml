@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="9797e032-b5cf-4938-a013-4f353d4c61ce" name="Default Changelist" comment="hello osu ~" />
+    <list default="true" id="9797e032-b5cf-4938-a013-4f353d4c61ce" name="Default Changelist" comment="hello osu ~">
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+    </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -9,7 +11,17 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="FileEditorManager">
-    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300" />
+    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/README.md">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="60">
+              <caret line="4" column="30" selection-start-line="4" selection-start-column="30" selection-end-line="4" selection-end-column="30" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+    </leaf>
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -71,7 +83,6 @@
         <option value="$PROJECT_DIR$/lib/pages/page_two.dart" />
         <option value="$PROJECT_DIR$/lib/pages/page_one.dart" />
         <option value="$PROJECT_DIR$/lib/pages/page_three.dart" />
-        <option value="$PROJECT_DIR$/README.md" />
         <option value="$PROJECT_DIR$/lib/pages/page_four.dart" />
         <option value="$PROJECT_DIR$/lib/widgets/done.dart" />
         <option value="$PROJECT_DIR$/pubspec.yaml" />
@@ -86,6 +97,7 @@
         <option value="$PROJECT_DIR$/lib/pages/osu.dart" />
         <option value="$PROJECT_DIR$/lib/widgets/decimal-input.dart" />
         <option value="$PROJECT_DIR$/.gitingore" />
+        <option value="$PROJECT_DIR$/README.md" />
       </list>
     </option>
   </component>
@@ -193,9 +205,10 @@
   </component>
   <component name="ToolWindowManager">
     <frame x="51" y="52" width="1163" height="930" extended-state="0" />
+    <editor active="true" />
     <layout>
       <window_info id="Captures" order="0" weight="0.25" />
-      <window_info content_ui="combo" id="Project" order="1" sideWeight="0.49818182" visible="true" weight="0.3309545" />
+      <window_info active="true" content_ui="combo" id="Project" order="1" sideWeight="0.49818182" visible="true" weight="0.3309545" />
       <window_info id="Structure" order="2" sideWeight="0.5018182" side_tool="true" weight="0.3309545" />
       <window_info id="Image Layers" order="3" />
       <window_info id="Designer" order="4" />
@@ -206,7 +219,7 @@
       <window_info anchor="bottom" id="Run" order="1" sideWeight="0.49946752" weight="0.3436754" />
       <window_info anchor="bottom" id="TODO" order="2" weight="0.32746115" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.3877551" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="4" sideWeight="0.49946752" visible="true" weight="0.44868734" />
+      <window_info anchor="bottom" id="Terminal" order="4" sideWeight="0.49946752" visible="true" weight="0.44868734" />
       <window_info anchor="bottom" id="Event Log" order="5" sideWeight="0.5005325" side_tool="true" weight="0.32970297" />
       <window_info anchor="bottom" id="Flutter Performance" order="6" side_tool="true" />
       <window_info anchor="bottom" id="Version Control" order="7" weight="0.32953367" />
@@ -225,13 +238,6 @@
     <option name="LAST_COMMIT_MESSAGE" value="hello osu ~" />
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/README.md">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="30">
-          <caret line="2" column="12" selection-start-line="2" selection-start-column="12" selection-end-line="2" selection-end-column="12" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/ios/Runner.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings">
       <provider selected="true" editor-type-id="text-editor" />
     </entry>
@@ -516,6 +522,13 @@
             <element signature="e#860#1066#0" />
             <element signature="e#1771#2116#0" />
           </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/README.md">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="60">
+          <caret line="4" column="30" selection-start-line="4" selection-start-column="30" selection-end-line="4" selection-end-column="30" />
         </state>
       </provider>
     </entry>
