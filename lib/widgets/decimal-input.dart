@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:keyboard_actions/keyboard_actions.dart';
+import 'package:osu/widgets/country.dart';
 import 'package:osu/utils/textField-formatter.dart';
 
 List<KeyboardAction> actions = [];
@@ -37,6 +38,31 @@ class _DecimalInputState extends State<DecimalInput> {
     super.initState();
   }
 
+  Widget _buildPrefixIcon() {
+    return Container(
+        width: 100,
+        child: IconButton(
+            icon: Row(
+              children: <Widget>[
+                Container(
+                  width: 50,
+                  child: Text(
+                    widget.labelText,
+                    style: TextStyle(fontSize: 25),
+                  ),
+                ),
+                Text("CNY")
+              ],
+            ),
+            onPressed: () {
+              showModalBottomSheet(
+                  context: context,
+                  builder: (builder) {
+                    return Country();
+                  });
+            }));
+  }
+
   @override
   Widget build(BuildContext context) {
     return TextField(
@@ -45,7 +71,7 @@ class _DecimalInputState extends State<DecimalInput> {
       keyboardAppearance: Brightness.light,
       keyboardType: TextInputType.numberWithOptions(decimal: true),
       decoration: InputDecoration(
-        labelText: widget.labelText,
+        prefixIcon: _buildPrefixIcon(),
       ),
       inputFormatters: [UsNumberTextInputFormatter()],
     );

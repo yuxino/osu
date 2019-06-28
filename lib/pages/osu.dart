@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:osu/widgets/decimal-input.dart';
 
+import 'package:osu/widgets/country.dart';
+
 class OsuPage extends StatefulWidget {
   OsuPage({Key key}) : super(key: key);
 
@@ -18,67 +20,20 @@ class _OsuPageState extends State<OsuPage> {
   };
 
   void _toggleFlag() {
-//    setState(() {
-//      flag = flag ? false : true;
-//    });
-
-    _showNotionalFlag();
-  }
-
-  void _showNotionalFlag() {
-    showModalBottomSheet(
-        context: context,
-        builder: (BuildContext context) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              ListTile(
-                leading: Text(
-                  '🇺🇸',
-                  style: TextStyle(fontSize: 25),
-                ),
-                title: Text('美国'),
-                subtitle: Text('hello'),
-              ),
-              ListTile(
-                leading: Text(
-                  '🇨🇳',
-                  style: TextStyle(fontSize: 25),
-                ),
-                title: Text('中国'),
-                subtitle: Text('hello'),
-              ),
-              ListTile(
-                leading: Text(
-                  '🇨🇳',
-                  style: TextStyle(fontSize: 25),
-                ),
-                title: Text('中国'),
-                subtitle: Text('hello'),
-              ),
-              ListTile(
-                leading: Text(
-                  '🇫🇷',
-                  style: TextStyle(fontSize: 25),
-                ),
-                title: Text('法国'),
-                subtitle: Text('hello'),
-              )
-            ],
-          );
-        });
+    setState(() {
+      flag = flag ? false : true;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget _firstInput = Container(
-        child: Column(
+    Widget _firstInput = Column(
       children: <Widget>[
         DecimalInput(
-          labelText: 'CNY',
-        )
+          labelText: '🇨🇳',
+        ),
       ],
-    ));
+    );
 
     Widget _exChangeIcon = Container(
       padding: EdgeInsets.symmetric(vertical: 30),
@@ -88,14 +43,13 @@ class _OsuPageState extends State<OsuPage> {
       ),
     );
 
-    Widget _secondInput = Container(
-        child: Column(
+    Widget _secondInput = Column(
       children: <Widget>[
         DecimalInput(
-          labelText: 'JPY',
-        )
+          labelText: '🇯🇵',
+        ),
       ],
-    ));
+    );
 
     return Center(
       child: UnconstrainedBox(
