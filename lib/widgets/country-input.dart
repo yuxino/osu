@@ -7,8 +7,15 @@ class Input extends StatefulWidget {
   final showCountry;
   final hintText;
   final bool enable;
+  final ValueChanged<String> onChanged;
 
-  Input({Key key, this.country, this.showCountry, this.hintText, this.enable})
+  Input(
+      {Key key,
+      this.country,
+      this.showCountry,
+      this.hintText,
+      this.enable,
+      this.onChanged})
       : super(key: key);
 
   @override
@@ -33,7 +40,8 @@ class _InputState extends State<Input> {
             prefixOnPress: () {
               widget.showCountry(changeCountry);
             },
-            hintText: widget.hintText),
+            hintText: widget.hintText,
+            onChanged: widget.onChanged),
       ],
     );
   }

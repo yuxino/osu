@@ -1,6 +1,8 @@
 import "package:flutter/cupertino.dart";
 import "package:flutter/material.dart";
 import "package:osu/constants/country-code.dart";
+import 'package:osu/services/api.dart';
+import 'package:osu/utils/debounce.dart';
 import "package:osu/widgets/country-input.dart";
 import "package:osu/widgets/country.dart";
 
@@ -14,6 +16,10 @@ class OsuPage extends StatefulWidget {
 class _OsuPageState extends State<OsuPage> {
   var _firstInputState = COUNTRY_CODE[0];
   var _secondInputState = COUNTRY_CODE[1];
+  var _cached = {};
+  var _loading = false;
+
+  final _debounce = Debounce(milliseconds: 200);
 
   final verticalDirection = {
     false: VerticalDirection.down,
@@ -40,33 +46,42 @@ class _OsuPageState extends State<OsuPage> {
     });
   }
 
-//  bool _isChange() {
-//    return true;
-//  }
-
   Function _showCountry(String state) {
     return (Function callback) {
       showModalBottomSheet(
-          context: context,
-          builder: (builder) {
-            return Country(callback: (item) {
+        context: context,
+        builder: (builder) {
+          return Country(
+            callback: (item) {
               switch (state) {
                 case "FIRST":
                   return _setFirstInputState(item);
                 case "SECOND":
                   return _setSecondInputState(item);
               }
-            });
-          });
+            },
+          );
+        },
+      );
     };
+  }
+
+  _computerConversion(String s) async {
+    final data = await getConversion(
+        c1: _firstInputState['code'], c2: _secondInputState['code']);
+    print(data);
   }
 
   @override
   Widget build(BuildContext context) {
     Widget _firstInput = Input(
-        country: _firstInputState,
-        showCountry: _showCountry("FIRST"),
-        hintText: "Input Money");
+      country: _firstInputState,
+      showCountry: _showCountry("FIRST"),
+      hintText: "Input Money",
+      onChanged: (s) {
+        _debounce.run(() => _computerConversion(s));
+      },
+    );
 
     Widget _exChangeIcon = Container(
       padding: EdgeInsets.symmetric(vertical: 30),
@@ -77,10 +92,11 @@ class _OsuPageState extends State<OsuPage> {
     );
 
     Widget _secondInput = Input(
-        enable: false,
-        country: _secondInputState,
-        showCountry: _showCountry("SECOND"),
-        hintText: "Output Money");
+      enable: false,
+      country: _secondInputState,
+      showCountry: _showCountry("SECOND"),
+      hintText: _loading ? "Getting Conversion ..." : "Output Money",
+    );
 
     return Center(
       child: UnconstrainedBox(

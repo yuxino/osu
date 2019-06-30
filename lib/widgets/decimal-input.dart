@@ -11,6 +11,7 @@ class DecimalInput extends StatefulWidget {
   final String icon;
   final String hintText;
   final Function prefixOnPress;
+  final ValueChanged<String> onChanged;
 
   DecimalInput(
       {Key key,
@@ -18,7 +19,8 @@ class DecimalInput extends StatefulWidget {
       this.icon,
       this.prefixOnPress,
       this.hintText,
-      this.enable})
+      this.enable,
+      this.onChanged})
       : super(key: key);
 
   @override
@@ -80,6 +82,7 @@ class _DecimalInputState extends State<DecimalInput> {
       decoration: InputDecoration(
           prefixIcon: _buildPrefixIcon(), hintText: widget.hintText),
       inputFormatters: [UsNumberTextInputFormatter()],
+      onChanged: widget.onChanged,
     );
   }
 }
