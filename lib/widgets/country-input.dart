@@ -1,5 +1,5 @@
-import 'package:flutter/cupertino.dart';
-import 'package:osu/widgets/decimal-input.dart';
+import "package:flutter/cupertino.dart";
+import "package:osu/widgets/decimal-input.dart";
 
 // ignore: must_be_immutable
 class Input extends StatefulWidget {
@@ -21,13 +21,11 @@ class _InputState extends State<Input> {
 
   @override
   Widget build(BuildContext context) {
-    print(widget.country);
-
     return Column(
       children: <Widget>[
         DecimalInput(
-          text: widget.country['code'],
-          icon: widget.country['emoji'],
+          text: widget.country["code"],
+          icon: widget.country["emoji"],
           prefixOnPress: () {
             widget.showCountry(changeCountry);
           },

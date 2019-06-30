@@ -1,8 +1,8 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:osu/constants/country-code.dart';
-import 'package:osu/widgets/country-input.dart';
-import 'package:osu/widgets/country.dart';
+import "package:flutter/cupertino.dart";
+import "package:flutter/material.dart";
+import "package:osu/constants/country-code.dart";
+import "package:osu/widgets/country-input.dart";
+import "package:osu/widgets/country.dart";
 
 class OsuPage extends StatefulWidget {
   OsuPage({Key key}) : super(key: key);
@@ -13,6 +13,7 @@ class OsuPage extends StatefulWidget {
 
 class _OsuPageState extends State<OsuPage> {
   bool _flag = false;
+
   var _firstInputState = COUNTRY_CODE[0];
   var _secondInputState = COUNTRY_CODE[1];
 
@@ -27,18 +28,39 @@ class _OsuPageState extends State<OsuPage> {
     });
   }
 
-  void _showCountry(callback) {
-    showModalBottomSheet(
-        context: context,
-        builder: (builder) {
-          return Country(callback: callback);
-        });
+  void _setFirstInputState(item) {
+    setState(() {
+      _firstInputState = item;
+    });
+  }
+
+  void _setSecondInputState(item) {
+    setState(() {
+      _secondInputState = item;
+    });
+  }
+
+  Function _showCountry(String state) {
+    return (Function callback) {
+      showModalBottomSheet(
+          context: context,
+          builder: (builder) {
+            return Country(callback: (item) {
+              switch (state) {
+                case "FIRST":
+                  return _setFirstInputState(item);
+                case "SECOND":
+                  return _setSecondInputState(item);
+              }
+            });
+          });
+    };
   }
 
   @override
   Widget build(BuildContext context) {
     Widget _firstInput =
-        Input(country: _firstInputState, showCountry: _showCountry);
+        Input(country: _firstInputState, showCountry: _showCountry("FIRST"));
 
     Widget _exChangeIcon = Container(
       padding: EdgeInsets.symmetric(vertical: 30),
@@ -49,7 +71,7 @@ class _OsuPageState extends State<OsuPage> {
     );
 
     Widget _secondInput =
-        Input(country: _secondInputState, showCountry: _showCountry);
+        Input(country: _secondInputState, showCountry: _showCountry("SECOND"));
 
     return Center(
       child: UnconstrainedBox(

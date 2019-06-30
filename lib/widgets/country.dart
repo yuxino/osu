@@ -1,6 +1,6 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:osu/constants/country-code.dart';
+import "package:flutter/cupertino.dart";
+import "package:flutter/material.dart";
+import "package:osu/constants/country-code.dart";
 
 class Country extends StatelessWidget {
   final callback;
@@ -17,13 +17,13 @@ class Country extends StatelessWidget {
           leading: Container(
             width: 50,
             child: Text(
-              item['emoji'],
+              item["emoji"],
               style: TextStyle(fontSize: 25),
               textAlign: TextAlign.center,
             ),
           ),
-          title: Text(item['country']),
-          subtitle: Text(item['code']),
+          title: Text(item["country"]),
+          subtitle: Text(item["code"]),
           onTap: () {
             callback(item);
             Navigator.pop(context);
