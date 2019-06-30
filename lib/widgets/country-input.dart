@@ -5,8 +5,11 @@ import "package:osu/widgets/decimal-input.dart";
 class Input extends StatefulWidget {
   var country = {"code": "", "emoji": ""};
   final showCountry;
+  final hintText;
+  final bool enable;
 
-  Input({Key key, this.country, this.showCountry}) : super(key: key);
+  Input({Key key, this.country, this.showCountry, this.hintText, this.enable})
+      : super(key: key);
 
   @override
   _InputState createState() => _InputState();
@@ -24,12 +27,13 @@ class _InputState extends State<Input> {
     return Column(
       children: <Widget>[
         DecimalInput(
-          text: widget.country["code"],
-          icon: widget.country["emoji"],
-          prefixOnPress: () {
-            widget.showCountry(changeCountry);
-          },
-        ),
+            enable: widget.enable,
+            text: widget.country["code"],
+            icon: widget.country["emoji"],
+            prefixOnPress: () {
+              widget.showCountry(changeCountry);
+            },
+            hintText: widget.hintText),
       ],
     );
   }

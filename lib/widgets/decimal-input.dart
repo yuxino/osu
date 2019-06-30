@@ -6,11 +6,19 @@ import "package:osu/utils/textField-formatter.dart";
 List<KeyboardAction> actions = [];
 
 class DecimalInput extends StatefulWidget {
+  final bool enable;
   final String text;
   final String icon;
+  final String hintText;
   final Function prefixOnPress;
 
-  DecimalInput({Key key, this.text, this.icon, this.prefixOnPress})
+  DecimalInput(
+      {Key key,
+      this.text,
+      this.icon,
+      this.prefixOnPress,
+      this.hintText,
+      this.enable})
       : super(key: key);
 
   @override
@@ -64,13 +72,13 @@ class _DecimalInputState extends State<DecimalInput> {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      enabled: widget.enable,
       focusNode: focusNode,
       cursorColor: Colors.pink,
       keyboardAppearance: Brightness.light,
       keyboardType: TextInputType.numberWithOptions(decimal: true),
       decoration: InputDecoration(
-        prefixIcon: _buildPrefixIcon(),
-      ),
+          prefixIcon: _buildPrefixIcon(), hintText: widget.hintText),
       inputFormatters: [UsNumberTextInputFormatter()],
     );
   }

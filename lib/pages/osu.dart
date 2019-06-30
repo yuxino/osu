@@ -12,8 +12,6 @@ class OsuPage extends StatefulWidget {
 }
 
 class _OsuPageState extends State<OsuPage> {
-  bool _flag = false;
-
   var _firstInputState = COUNTRY_CODE[0];
   var _secondInputState = COUNTRY_CODE[1];
 
@@ -24,7 +22,9 @@ class _OsuPageState extends State<OsuPage> {
 
   void _toggleFlag() {
     setState(() {
-      _flag = _flag ? false : true;
+      final temp = _firstInputState;
+      _firstInputState = _secondInputState;
+      _secondInputState = temp;
     });
   }
 
@@ -39,6 +39,10 @@ class _OsuPageState extends State<OsuPage> {
       _secondInputState = item;
     });
   }
+
+//  bool _isChange() {
+//    return true;
+//  }
 
   Function _showCountry(String state) {
     return (Function callback) {
@@ -59,8 +63,10 @@ class _OsuPageState extends State<OsuPage> {
 
   @override
   Widget build(BuildContext context) {
-    Widget _firstInput =
-        Input(country: _firstInputState, showCountry: _showCountry("FIRST"));
+    Widget _firstInput = Input(
+        country: _firstInputState,
+        showCountry: _showCountry("FIRST"),
+        hintText: "Input Money");
 
     Widget _exChangeIcon = Container(
       padding: EdgeInsets.symmetric(vertical: 30),
@@ -70,8 +76,11 @@ class _OsuPageState extends State<OsuPage> {
       ),
     );
 
-    Widget _secondInput =
-        Input(country: _secondInputState, showCountry: _showCountry("SECOND"));
+    Widget _secondInput = Input(
+        enable: false,
+        country: _secondInputState,
+        showCountry: _showCountry("SECOND"),
+        hintText: "Output Money");
 
     return Center(
       child: UnconstrainedBox(
@@ -79,7 +88,6 @@ class _OsuPageState extends State<OsuPage> {
           width: MediaQuery.of(context).size.width,
           padding: EdgeInsets.all(35),
           child: Column(
-            verticalDirection: verticalDirection[_flag],
             children: <Widget>[
               _firstInput,
               _exChangeIcon,
