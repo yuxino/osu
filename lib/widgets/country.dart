@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:osu/constants/country-code.dart';
 
 class Country extends StatelessWidget {
+  final callback;
+
+  Country({this.callback});
+
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
@@ -21,7 +25,8 @@ class Country extends StatelessWidget {
           title: Text(item['country']),
           subtitle: Text(item['code']),
           onTap: () {
-            print(item);
+            callback(item);
+            Navigator.pop(context);
           },
         );
       },

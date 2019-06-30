@@ -1,15 +1,17 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:keyboard_actions/keyboard_actions.dart';
-import 'package:osu/widgets/country.dart';
 import 'package:osu/utils/textField-formatter.dart';
 
 List<KeyboardAction> actions = [];
 
 class DecimalInput extends StatefulWidget {
-  final String labelText;
+  final String text;
+  final String icon;
+  final Function prefixOnPress;
 
-  DecimalInput({Key key, this.labelText}) : super(key: key);
+  DecimalInput({Key key, this.text, this.icon, this.prefixOnPress})
+      : super(key: key);
 
   @override
   _DecimalInputState createState() => _DecimalInputState();
@@ -47,19 +49,15 @@ class _DecimalInputState extends State<DecimalInput> {
                 Container(
                   width: 50,
                   child: Text(
-                    widget.labelText,
+                    widget.icon,
                     style: TextStyle(fontSize: 25),
                   ),
                 ),
-                Text("CNY")
+                Text(widget.text)
               ],
             ),
             onPressed: () {
-              showModalBottomSheet(
-                  context: context,
-                  builder: (builder) {
-                    return Country();
-                  });
+              widget.prefixOnPress();
             }));
   }
 
