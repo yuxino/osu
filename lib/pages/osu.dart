@@ -5,6 +5,7 @@ import 'package:osu/services/api.dart';
 import 'package:osu/utils/debounce.dart';
 import "package:osu/widgets/country-input.dart";
 import "package:osu/widgets/country.dart";
+import 'package:decimal/decimal.dart';
 
 class OsuPage extends StatefulWidget {
   OsuPage({Key key}) : super(key: key);
@@ -18,9 +19,10 @@ class _OsuPageState extends State<OsuPage> {
   var _secondInputState = COUNTRY_CODE[1];
   var _cached = {};
   var _loading = false;
+  var _firstController = TextEditingController(text: '');
   var _secondController = TextEditingController(text: '');
 
-  final _debounce = Debounce(milliseconds: 200);
+  final _debounce = Debounce(milliseconds: 100);
 
   final verticalDirection = {
     false: VerticalDirection.down,
@@ -38,12 +40,14 @@ class _OsuPageState extends State<OsuPage> {
   void _setFirstInputState(item) {
     setState(() {
       _firstInputState = item;
+      _computerConversion(_firstController.text);
     });
   }
 
   void _setSecondInputState(item) {
     setState(() {
       _secondInputState = item;
+      _computerConversion(_firstController.text);
     });
   }
 
@@ -80,20 +84,26 @@ class _OsuPageState extends State<OsuPage> {
     final c1 = _firstInputState['code'];
     final c2 = _secondInputState['code'];
     final key = '$c1-$c2';
-    var rate;
+    Decimal rate;
+    Decimal number;
 
-    final double number = text != "" ? double.parse(text) : 0.00;
-    if (_cached[key] == null) {
-      _loadingStart();
-      final data = await getConversion(c1: c1, c2: c2);
-      rate = double.parse(data['data']['rate']);
-      _cached[key] = rate;
-      _loadingEnd();
+    if (c1 == c2) {
+      rate = Decimal.fromInt(1);
     } else {
-      rate = _cached[key];
+      if (_cached[key] == null) {
+        _loadingStart();
+        final data = await getConversion(c1: c1, c2: c2);
+        rate = Decimal.parse(data['data']['rate']);
+        print(rate);
+        _cached[key] = rate;
+        _loadingEnd();
+      } else {
+        rate = _cached[key];
+      }
     }
+    number = text != "" ? Decimal.parse(text) : Decimal.fromInt(0);
 
-    final String result = number != 0 ? '${number * rate}' : '';
+    final String result = text != "" ? '${(number * rate)}' : '';
     _secondController.text = result;
   }
 
@@ -106,6 +116,7 @@ class _OsuPageState extends State<OsuPage> {
       onChanged: (text) {
         _debounce.run(() => _computerConversion(text));
       },
+      controller: _firstController,
     );
 
     Widget _exChangeIcon = Container(
