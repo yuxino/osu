@@ -6,7 +6,7 @@ import "dart:convert";
 getConversion({String c1, String c2}) async {
   try {
     final url =
-        "http://www.zhaotool.com/v1/api/huobi/e10adc3949ba59abbe56e057f20f883e/$c1/$c2";
+        "http://www.zhaotool.com/v1/api/huobi/e10adc3949ba59abbe56e057f20f883e/$c2/$c1";
     final httpClient = HttpClient();
     final request = await httpClient.getUrl(Uri.parse(url));
     final response = await request.close();

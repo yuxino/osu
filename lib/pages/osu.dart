@@ -1,6 +1,7 @@
 import "package:flutter/cupertino.dart";
 import "package:flutter/material.dart";
 import "package:osu/constants/country-code.dart";
+import 'package:osu/services/api.dart';
 import 'package:osu/utils/debounce.dart';
 import "package:osu/widgets/country-input.dart";
 import "package:osu/widgets/country.dart";
@@ -46,6 +47,15 @@ class _OsuPageState extends State<OsuPage> {
     });
   }
 
+  void _loadingStart() {
+    this.setState(() => {_loading = true});
+    _secondController.text = '';
+  }
+
+  void _loadingEnd() {
+    this.setState(() => {_loading = false});
+  }
+
   Function _showCountry(String state) {
     return (Function callback) {
       showModalBottomSheet(
@@ -67,10 +77,23 @@ class _OsuPageState extends State<OsuPage> {
   }
 
   _computerConversion(String text) async {
+    final c1 = _firstInputState['code'];
+    final c2 = _secondInputState['code'];
+    final key = '$c1-$c2';
+    var rate;
+
     final double number = text != "" ? double.parse(text) : 0.00;
-//    final data = await getConversion(
-//        c1: _firstInputState['code'], c2: _secondInputState['code']);
-    final String result = number != 0 ? '${number * 15}' : '';
+    if (_cached[key] == null) {
+      _loadingStart();
+      final data = await getConversion(c1: c1, c2: c2);
+      rate = double.parse(data['data']['rate']);
+      _cached[key] = rate;
+      _loadingEnd();
+    } else {
+      rate = _cached[key];
+    }
+
+    final String result = number != 0 ? '${number * rate}' : '';
     _secondController.text = result;
   }
 
