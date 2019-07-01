@@ -2,6 +2,8 @@
 
 A Currency Conversion App. Just Conversion hot country XD
 
+<img src="https://user-images.githubusercontent.com/12481935/60421944-74425680-9c1d-11e9-8210-53ff5efaf994.png" width="150" alt="osu icon" />
+
 ## Basic
 
 ![image](https://user-images.githubusercontent.com/12481935/60421205-ec0f8180-9c1b-11e9-8a69-7b4015abec67.png)
