@@ -1,7 +1,6 @@
 import "package:flutter/cupertino.dart";
 import "package:flutter/material.dart";
 import "package:osu/constants/country-code.dart";
-import 'package:osu/services/api.dart';
 import 'package:osu/utils/debounce.dart';
 import "package:osu/widgets/country-input.dart";
 import "package:osu/widgets/country.dart";
@@ -18,6 +17,7 @@ class _OsuPageState extends State<OsuPage> {
   var _secondInputState = COUNTRY_CODE[1];
   var _cached = {};
   var _loading = false;
+  var _secondController = TextEditingController(text: '');
 
   final _debounce = Debounce(milliseconds: 200);
 
@@ -66,20 +66,22 @@ class _OsuPageState extends State<OsuPage> {
     };
   }
 
-  _computerConversion(String s) async {
-    final data = await getConversion(
-        c1: _firstInputState['code'], c2: _secondInputState['code']);
-    print(data);
+  _computerConversion(String text) async {
+    final double number = text != "" ? double.parse(text) : 0.00;
+//    final data = await getConversion(
+//        c1: _firstInputState['code'], c2: _secondInputState['code']);
+    final String result = number != 0 ? '${number * 15}' : '';
+    _secondController.text = result;
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget _firstInput = Input(
+    Widget _firstInput = CountryInput(
       country: _firstInputState,
       showCountry: _showCountry("FIRST"),
       hintText: "Input Money",
-      onChanged: (s) {
-        _debounce.run(() => _computerConversion(s));
+      onChanged: (text) {
+        _debounce.run(() => _computerConversion(text));
       },
     );
 
@@ -91,11 +93,12 @@ class _OsuPageState extends State<OsuPage> {
       ),
     );
 
-    Widget _secondInput = Input(
+    Widget _secondInput = CountryInput(
       enable: false,
       country: _secondInputState,
       showCountry: _showCountry("SECOND"),
       hintText: _loading ? "Getting Conversion ..." : "Output Money",
+      controller: _secondController,
     );
 
     return Center(

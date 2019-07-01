@@ -12,6 +12,7 @@ class DecimalInput extends StatefulWidget {
   final String hintText;
   final Function prefixOnPress;
   final ValueChanged<String> onChanged;
+  final TextEditingController controller;
 
   DecimalInput(
       {Key key,
@@ -20,7 +21,8 @@ class DecimalInput extends StatefulWidget {
       this.prefixOnPress,
       this.hintText,
       this.enable,
-      this.onChanged})
+      this.onChanged,
+      this.controller})
       : super(key: key);
 
   @override
@@ -73,16 +75,29 @@ class _DecimalInputState extends State<DecimalInput> {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      enabled: widget.enable,
-      focusNode: focusNode,
-      cursorColor: Colors.pink,
-      keyboardAppearance: Brightness.light,
-      keyboardType: TextInputType.numberWithOptions(decimal: true),
-      decoration: InputDecoration(
-          prefixIcon: _buildPrefixIcon(), hintText: widget.hintText),
-      inputFormatters: [UsNumberTextInputFormatter()],
-      onChanged: widget.onChanged,
+    var enable = widget.enable;
+    return Theme(
+      data: enable == false
+          ? Theme.of(context).copyWith(splashColor: Colors.transparent)
+          : ThemeData(),
+      child: TextField(
+        focusNode: focusNode,
+        cursorColor: Colors.pink,
+        keyboardAppearance: Brightness.light,
+        keyboardType: TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+            prefixIcon: _buildPrefixIcon(), hintText: widget.hintText),
+        inputFormatters: [UsNumberTextInputFormatter()],
+        onChanged: widget.onChanged,
+        controller: widget.controller,
+        enableInteractiveSelection: enable,
+        style: TextStyle(),
+        onTap: () {
+          if (enable == false) {
+            focusNode.unfocus();
+          }
+        },
+      ),
     );
   }
 }
