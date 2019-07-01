@@ -22,7 +22,7 @@ class _OsuPageState extends State<OsuPage> {
   var _firstController = TextEditingController(text: '');
   var _secondController = TextEditingController(text: '');
 
-  final _debounce = Debounce(milliseconds: 100);
+  final _debounce = Debounce(milliseconds: 0);
 
   final verticalDirection = {
     false: VerticalDirection.down,
@@ -34,6 +34,9 @@ class _OsuPageState extends State<OsuPage> {
       final temp = _firstInputState;
       _firstInputState = _secondInputState;
       _secondInputState = temp;
+      if (_firstController.text != "") {
+        _computerConversion(_firstController.text);
+      }
     });
   }
 

@@ -12,7 +12,6 @@ class MyApp extends StatelessWidget {
         theme: ThemeData(
           primarySwatch: Colors.blue,
         ),
-//        router ,
         home: Scaffold(
           appBar: AppBar(
             title: Text("Osu"),
