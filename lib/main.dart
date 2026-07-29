@@ -1,22 +1,9 @@
-import "package:flutter/material.dart";
-import "package:keyboard_actions/keyboard_actions.dart";
-import "package:osu/pages/osu.dart";
+import 'package:flutter/widgets.dart';
 
-void main() => runApp(MyApp());
+import 'app.dart';
+import 'services/rate_repository.dart';
 
-class MyApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-        title: "Flutter Demo",
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-        ),
-        home: Scaffold(
-          appBar: AppBar(
-            title: Text("Osu"),
-          ),
-          body: FormKeyboardActions(child: OsuPage()),
-        ));
-  }
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(OsuApp(repository: FrankfurterRateRepository()));
 }

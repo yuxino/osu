@@ -1,28 +1,46 @@
 name: osu
-description: A new Flutter application.
-
-version: 1.0.0+1
+description: "A calm, modern currency converter."
+publish_to: 'none'
+version: 2.0.0+2
 
 environment:
-  sdk: ">=2.2.0 <3.0.0"
+  sdk: ^3.12.2
 
 dependencies:
+  cupertino_icons: ^1.0.9
   flutter:
     sdk: flutter
-  cupertino_icons: ^0.1.2
-  keyboard_actions: "^2.1.1"
-  decimal: ^0.3.0
+  http: ^1.6.0
+  intl: ^0.20.3
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_launcher_icons: "^0.7.2"
-
-flutter_icons:
-  android: true
-  ios: true
-  image_path: "assets/icon/app-icon.png"
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/osu_mark.png
+  fonts:
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces.ttf
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope.ttf
 
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/branding/osu_mark.png
+  adaptive_icon_background: "#F5F1E8"
+  adaptive_icon_foreground: assets/branding/osu_mark.png
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: assets/branding/osu_mark.png
+    background_color: "#F5F1E8"
+    theme_color: "#F5F1E8"
