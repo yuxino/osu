@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/icon/osu-logo.svg" width="320" alt="osu logo">
+  <img src="assets/icon/osu-logo.svg" width="220" alt="osu logo">
   <p>A tiny Flutter currency converter for quick, no-fuss conversions.</p>
   <p>Type an amount, pick a pair, swap when needed — that's basically it.</p>
 </div>
