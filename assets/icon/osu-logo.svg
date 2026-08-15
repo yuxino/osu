@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff9ed2"/>
+      <stop offset="0.48" stop-color="#c7a7ff"/>
+      <stop offset="1" stop-color="#8fdcff"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#eef5ff"/>
+      <stop offset="0.45" stop-color="#c9d7ff"/>
+      <stop offset="1" stop-color="#b9a5ef"/>
+    </linearGradient>
+    <linearGradient id="hair2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#dde9ff"/>
+      <stop offset="1" stop-color="#a991e5"/>
+    </linearGradient>
+    <linearGradient id="dress" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff8fd"/>
+      <stop offset="0.55" stop-color="#ffd9eb"/>
+      <stop offset="1" stop-color="#d9d2ff"/>
+    </linearGradient>
+    <linearGradient id="word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#c8a8ff"/>
+      <stop offset="0.5" stop-color="#ff9acb"/>
+      <stop offset="1" stop-color="#8bd8ef"/>
+    </linearGradient>
+    <radialGradient id="eye" cx="50%" cy="35%" r="65%">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.18" stop-color="#b9c9ff"/>
+      <stop offset="0.58" stop-color="#7e68cd"/>
+      <stop offset="1" stop-color="#493d7b"/>
+    </radialGradient>
+    <radialGradient id="coin" cx="35%" cy="25%" r="75%">
+      <stop offset="0" stop-color="#fff9ca"/>
+      <stop offset="0.55" stop-color="#ffd66e"/>
+      <stop offset="1" stop-color="#f7b84d"/>
+    </radialGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#b9a4d6" flood-opacity="0.20"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#ffffff"/>
+  <circle cx="512" cy="430" r="346" fill="#fffafd"/>
+  <circle cx="512" cy="430" r="349" fill="none" stroke="url(#ring)" stroke-width="8"/>
+  <circle cx="512" cy="430" r="326" fill="none" stroke="#f3d7ef" stroke-width="3" stroke-dasharray="15 10"/>
+
+  <g opacity="0.92">
+    <path d="M190 318 l14 28 30 4-22 21 6 30-28-15-27 15 5-30-22-21 31-4z" fill="#c4b3ff"/>
+    <path d="M828 278 l10 21 23 3-17 16 4 23-20-11-21 11 4-23-17-16 24-3z" fill="#ffb1d8"/>
+    <path d="M812 640 l12 24 27 4-20 18 5 27-24-13-24 13 5-27-20-18 27-4z" fill="#b9ddff"/>
+    <circle cx="214" cy="582" r="9" fill="#ffb7d9"/>
+    <circle cx="811" cy="503" r="8" fill="#cbbaff"/>
+    <circle cx="752" cy="150" r="7" fill="#ffcae3"/>
+    <path d="M267 191 c-18-30-63-6-43 26 19 30 43 42 43 42s24-12 43-42c20-32-25-56-43-26z" fill="#ffd4e7"/>
+    <path d="M740 174 c-13-22-46-4-31 20 14 22 31 30 31 30s18-8 31-30c15-24-18-42-31-20z" fill="#d7ccff"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M322 375 C312 220 403 136 530 148 C661 160 744 257 718 410 C697 534 626 610 506 621 C384 626 320 529 322 375z" fill="url(#hair2)" stroke="#9e80cf" stroke-width="6"/>
+    <path d="M339 338 C309 273 324 196 386 157 C421 134 471 126 506 142 C450 145 420 177 408 218 C380 202 349 234 339 338z" fill="#d6e3ff" opacity="0.85"/>
+  </g>
+
+  <path d="M327 365 C267 393 260 494 310 542 C338 570 366 554 359 524 C344 468 374 432 396 415 C411 401 386 342 327 365z" fill="url(#hair)" stroke="#9f82ce" stroke-width="6"/>
+  <path d="M698 356 C757 383 768 479 727 532 C703 563 671 550 677 520 C688 464 660 428 637 409 C620 395 643 332 698 356z" fill="url(#hair)" stroke="#9f82ce" stroke-width="6"/>
+
+  <g>
+    <path d="M338 282 C302 254 286 208 307 186 C331 162 376 192 390 231 C367 235 349 250 338 282z" fill="#ffbfe0" stroke="#c789b8" stroke-width="5"/>
+    <path d="M678 280 C716 252 731 206 710 184 C688 161 644 193 628 231 C651 236 668 251 678 280z" fill="#bcb1ff" stroke="#8f7bc5" stroke-width="5"/>
+    <circle cx="362" cy="236" r="21" fill="#fff5fb" stroke="#ddb0cf" stroke-width="4"/>
+    <circle cx="654" cy="236" r="21" fill="#fff5fb" stroke="#baa9df" stroke-width="4"/>
+  </g>
+
+  <ellipse cx="511" cy="389" rx="170" ry="165" fill="#fff7f4" stroke="#d99bb0" stroke-width="5"/>
+
+  <g fill="url(#hair)" stroke="#9c7ac8" stroke-width="5">
+    <path d="M355 332 C365 223 432 183 496 184 C464 213 457 267 457 331 C427 292 392 298 355 332z"/>
+    <path d="M431 196 C484 165 557 175 593 214 C555 224 528 269 515 337 C497 285 472 237 431 196z"/>
+    <path d="M541 190 C618 190 676 244 681 328 C638 296 602 294 561 332 C567 272 560 226 541 190z"/>
+  </g>
+  <path d="M521 187 C512 150 528 118 556 112 C572 109 580 121 568 132 C549 150 549 167 555 190" fill="#d8e4ff" stroke="#9f82ce" stroke-width="5" stroke-linecap="round"/>
+
+  <g>
+    <ellipse cx="444" cy="392" rx="45" ry="55" fill="url(#eye)" stroke="#4f3d78" stroke-width="6"/>
+    <ellipse cx="577" cy="392" rx="45" ry="55" fill="url(#eye)" stroke="#4f3d78" stroke-width="6"/>
+    <ellipse cx="431" cy="372" rx="14" ry="18" fill="#ffffff" opacity="0.95"/>
+    <ellipse cx="563" cy="372" rx="14" ry="18" fill="#ffffff" opacity="0.95"/>
+    <circle cx="451" cy="414" r="8" fill="#f2b9ff"/>
+    <circle cx="584" cy="414" r="8" fill="#f2b9ff"/>
+    <path d="M397 346 Q441 321 479 349" fill="none" stroke="#7b5a85" stroke-width="7" stroke-linecap="round"/>
+    <path d="M544 348 Q580 321 623 347" fill="none" stroke="#7b5a85" stroke-width="7" stroke-linecap="round"/>
+  </g>
+
+  <g opacity="0.65" stroke="#f4a1b8" stroke-width="5" stroke-linecap="round">
+    <path d="M385 449 l18 6"/><path d="M393 438 l18 6"/><path d="M611 454 l18-6"/><path d="M604 442 l18-6"/>
+  </g>
+  <path d="M491 454 Q512 474 533 454 Q528 488 511 490 Q494 488 491 454z" fill="#ff9db6" stroke="#bc7086" stroke-width="4"/>
+
+  <g transform="translate(618 286) rotate(12)">
+    <path d="M0-28 L8-9 L29-8 L13 5 L18 26 L0 15 L-18 26 L-13 5 L-29-8 L-8-9z" fill="#fff3a8" stroke="#c69b59" stroke-width="4"/>
+    <circle cx="42" cy="8" r="11" fill="#ffb9d9" stroke="#c789b8" stroke-width="4"/>
+  </g>
+
+  <path d="M374 549 C414 514 465 508 512 512 C560 508 611 514 650 549 C684 581 689 643 668 694 L356 694 C337 642 340 582 374 549z" fill="url(#dress)" stroke="#b592ca" stroke-width="6"/>
+  <path d="M423 527 Q512 578 601 527 L582 584 Q512 610 442 584z" fill="#ffffff" opacity="0.92" stroke="#d6b7dd" stroke-width="5"/>
+  <path d="M437 588 C467 564 495 564 512 586 C530 564 558 565 588 589 C561 613 540 625 512 626 C484 625 462 613 437 588z" fill="#ffb5d5" stroke="#c680aa" stroke-width="5"/>
+  <circle cx="512" cy="606" r="17" fill="#c9b6ff" stroke="#8775b9" stroke-width="4"/>
+  <path d="M512 597 l5 9 10 1-8 7 2 10-9-5-9 5 2-10-8-7 10-1z" fill="#ffffff"/>
+
+  <path d="M382 570 C355 575 346 600 358 621 C369 640 392 638 411 622 L438 596 C423 579 404 566 382 570z" fill="#fff7f3" stroke="#d59cae" stroke-width="5"/>
+  <path d="M641 570 C670 575 678 600 666 621 C655 640 632 638 613 622 L586 596 C600 579 620 566 641 570z" fill="#fff7f3" stroke="#d59cae" stroke-width="5"/>
+  <circle cx="512" cy="644" r="63" fill="url(#coin)" stroke="#ca8d37" stroke-width="6" filter="url(#shadow)"/>
+  <path d="M484 629 h50 l-12-12 M540 659 h-50 l12 12" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M484 629 h50 l-12-12 M540 659 h-50 l12 12" fill="none" stroke="#c7833f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.45"/>
+
+  <g font-family="Arial Rounded MT Bold, Arial, sans-serif" font-weight="700" text-anchor="middle">
+    <circle cx="228" cy="459" r="33" fill="#fff1f7" stroke="#f4b4d1" stroke-width="4"/>
+    <text x="228" y="471" font-size="34" fill="#d27aa8">¥</text>
+    <circle cx="796" cy="424" r="31" fill="#eef8ff" stroke="#a9d6ef" stroke-width="4"/>
+    <text x="796" y="436" font-size="34" fill="#6ea8d0">$</text>
+    <circle cx="757" cy="593" r="27" fill="#f6efff" stroke="#c9b6ef" stroke-width="4"/>
+    <text x="757" y="604" font-size="29" fill="#8d72bf">€</text>
+  </g>
+
+  <g text-anchor="middle" font-family="Trebuchet MS, Arial Rounded MT Bold, sans-serif">
+    <text x="512" y="872" font-size="156" font-weight="700" letter-spacing="6" fill="url(#word)" stroke="#ffffff" stroke-width="12" paint-order="stroke">osu</text>
+    <text x="512" y="925" font-size="31" font-weight="700" letter-spacing="7" fill="#b79bd1">CURRENCY, BUT CUTE</text>
+  </g>
+
+  <g fill="#efb4d9">
+    <circle cx="396" cy="942" r="6"/><circle cx="628" cy="942" r="6"/>
+    <path d="M445 942 l8 16 18 2-13 12 3 18-16-9-16 9 3-18-13-12 18-2z" fill="#c6b3ff"/>
+    <path d="M579 942 l8 16 18 2-13 12 3 18-16-9-16 9 3-18-13-12 18-2z" fill="#9edbf4"/>
+  </g>
+</svg>
