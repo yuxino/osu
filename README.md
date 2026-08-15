@@ -1,7 +1,8 @@
 <div align="center">
-  <img src="assets/icon/app-icon.png" width="112" alt="osu app icon">
+  <img src="assets/icon/app-icon.png" width="240" alt="osu logo">
   <h1>osu</h1>
-  <p>A tiny currency converter built with Flutter.</p>
+  <p>A tiny Flutter currency converter for quick, no-fuss conversions.</p>
+  <p>Type an amount, pick a pair, swap when needed — that's basically it.</p>
 </div>
 
 ## Features
@@ -10,3 +11,9 @@
 - Swap the source and target currencies in one tap.
 - Pick currencies from the built-in country list.
 - Cache fetched exchange rates during the session.
+
+## About
+
+A small Flutter project from 2019, kept close to its original shape with a refreshed icon and README.
+
+MIT licensed.
