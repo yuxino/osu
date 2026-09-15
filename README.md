@@ -1,18 +1,20 @@
-<div align="center">
-  <img src="assets/icon/osu-logo.png" width="220" alt="osu logo">
-  <p>A tiny Flutter currency converter for quick, no-fuss conversions.</p>
-  <p>Type an amount, pick a pair, swap when needed — that's basically it.</p>
-</div>
+# osu
 
-## Features
+React Native + Expo + TypeScript 的全新项目起点。
 
-- Convert between currencies as you type.
-- Swap the source and target currencies in one tap.
-- Pick currencies from the built-in country list.
-- Cache fetched exchange rates during the session.
+## 开发
 
-## About
+需要 Node.js 22.13 或更高版本。
 
-A small Flutter project from 2019, kept close to its original shape with a refreshed icon and README.
+```sh
+npm install
+npm start
+```
 
-MIT licensed.
+- `npm run ios`：打开 iOS 模拟器（需要完成 Xcode 设置）。
+- `npm run android`：打开 Android 模拟器（需要 Android SDK）。
+- `npm run typecheck`：检查 TypeScript。
+
+入口为 `App.tsx`。iOS / Android 原生目录由 Expo 按需生成。
+
+仓库保留旧项目的 Git 历史；当前工作目录已重新初始化。
