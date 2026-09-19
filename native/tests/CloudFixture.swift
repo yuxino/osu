@@ -1,4 +1,6 @@
 import Foundation
+import UIKit
+import Network
 
 @MainActor final class FixtureRealtimeSocket: RealtimeSocket {
   var sentAudio = 0
@@ -32,15 +34,16 @@ import Foundation
   func close() { guard !closed else { return }; closed = true; waiting?.resume(throwing: AlibabaProtocol.Failure.transport); waiting = nil; messages.removeAll(); onClose?() }
 }
 
-// Controlled failures in the actual controller; all UI actions remain manual.
+// Controlled service responses for manual UI checks and controller regressions.
 // This file is only linked into the separate simulator harness, never the app.
 @MainActor final class CloudUIFixture {
-  private var sockets: [FixtureRealtimeSocket] = []
+  private(set) var sockets: [FixtureRealtimeSocket] = []
   func controller(ready: Bool = false) -> MimiPrototypeController {
     UserDefaults.standard.set(true, forKey: "osu.automaticLanguageDefaultsV1")
     UserDefaults.standard.set("alibaba", forKey: "mimi.engine")
     UserDefaults.standard.set(ready ? "auto" : "ja", forKey: "mimi.alibaba.source")
     UserDefaults.standard.set("zh", forKey: "mimi.alibaba.target")
+    writeState()
     return MimiPrototypeController(makeCloudClient: { [self] in
       let socket = FixtureRealtimeSocket()
       // First connection never becomes ready; later ones never confirm finish.
@@ -53,10 +56,66 @@ import Foundation
   }
   private func writeState() {
     let rows = sockets.map { ["closed": $0.closed, "audio": $0.sentAudio, "finish": $0.sentFinish] as [String: Any] }
-    let document: [String: Any] = ["scope": "UI lifecycle only; in-memory fake service, dummy credential, no network", "sockets": rows, "timestamp": ISO8601DateFormatter().string(from: Date())]
+    let document: [String: Any] = ["scope": "UI lifecycle only; in-memory fake service, dummy credential, no provider network", "sockets": rows, "timestamp": ISO8601DateFormatter().string(from: Date())]
     let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("cloud-ui-state.json")
     if let data = try? JSONSerialization.data(withJSONObject: document) { try? data.write(to: path, options: .atomic) }
   }
+}
+
+// Real controller + receiver, fake authenticated broadcast and cloud service.
+// Waiting deliberately exceeds the 40-second failure observed on the phone.
+@MainActor final class CaptureStartupFixture {
+  private var connection: NWConnection?
+  func run(controller: MimiPrototypeController, fixture: CloudUIFixture, completion: @escaping (Bool, String) -> Void) {
+    Task { @MainActor in
+      do {
+        try await Task.sleep(nanoseconds: 500_000_000)
+        try press("开始听", in: controller.view)
+        try await Task.sleep(nanoseconds: 45_000_000_000)
+        guard fixture.sockets.isEmpty, let guide = controller.presentedViewController as? CapturePermissionController else { throw failure("permission_wait_created_cloud_or_lost_guide") }
+        try press("暂不开启", in: guide.view)
+        try await Task.sleep(nanoseconds: 700_000_000)
+        guard fixture.sockets.isEmpty, controller.presentedViewController == nil else { throw failure("permission_cancel_did_not_stay_local") }
+        try press("开始听", in: controller.view)
+        try await Task.sleep(nanoseconds: 700_000_000)
+        let connection = NWConnection(host: "127.0.0.1", port: 49371, using: .tcp); self.connection = connection
+        connection.start(queue: DispatchQueue(label: "osu.capture.startup.fixture"))
+        // The very first authenticated packet also carries PCM. It must survive
+        // the cloud setup callback and keep the same receiver generation.
+        try await send(["key": MimiWire.key, "event": "started", "audio": Data([0, 1, 2, 3]).base64EncodedString()], to: connection)
+        try await Task.sleep(nanoseconds: 700_000_000)
+        guard fixture.sockets.count == 1, fixture.sockets[0].sentAudio == 1 else { throw failure("first_authenticated_audio_lost") }
+        try await send(["key": MimiWire.key, "event": "heartbeat", "audio": Data([4, 5, 6, 7]).base64EncodedString()], to: connection)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        guard fixture.sockets.count == 1, fixture.sockets[0].sentAudio == 2 else { throw failure("cloud_ready_restarted_receiver") }
+        try press("停止", in: controller.view)
+        try await Task.sleep(nanoseconds: 700_000_000)
+        guard fixture.sockets[0].closed, fixture.sockets[0].sentFinish == 1 else { throw failure("capture_stop_did_not_close_cloud") }
+        connection.cancel(); self.connection = nil
+        completion(true, "wait_45s_cancel_without_cloud_then_authenticated_audio_and_finish")
+      } catch {
+        connection?.cancel(); connection = nil
+        completion(false, (error as NSError).domain)
+      }
+    }
+  }
+  private func press(_ title: String, in view: UIView) throws {
+    func button(in view: UIView) -> UIButton? {
+      if let button = view as? UIButton, button.configuration?.title == title, button.isEnabled { return button }
+      return view.subviews.lazy.compactMap { button(in: $0) }.first
+    }
+    guard let target = button(in: view) else { throw failure("capture_action_unavailable") }
+    target.sendActions(for: .touchUpInside)
+  }
+  private func send(_ object: [String: Any], to connection: NWConnection) async throws {
+    let data = try JSONSerialization.data(withJSONObject: object) + Data([10])
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      connection.send(content: data, completion: .contentProcessed { error in
+        if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+      })
+    }
+  }
+  private func failure(_ name: String) -> NSError { NSError(domain: name, code: 1) }
 }
 
 @MainActor final class CloudFixture {

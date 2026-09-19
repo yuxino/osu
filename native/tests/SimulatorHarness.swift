@@ -12,6 +12,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
   private let cloudFixture = CloudFixture()
   private let lifecycle = CloudLifecycleFixture()
   private let cloudUI = CloudUIFixture()
+  private let captureStartup = CaptureStartupFixture()
   private let sample = CloudSampleTest()
   private var completed = false
   private let queue = DispatchQueue(label: "mimi.simulator.tests")
@@ -19,8 +20,11 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     let w = UIWindow(frame: UIScreen.main.bounds)
     let arguments = ProcessInfo.processInfo.arguments
     let category = AVAudioSession.sharedInstance().category, mode = AVAudioSession.sharedInstance().mode
-    w.rootViewController = arguments.contains("--capture-ui") ? cloudUI.controller(ready: true) : (arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController())
+    w.rootViewController = arguments.contains("--capture-ui") || arguments.contains("--verify-capture-start") ? cloudUI.controller(ready: true) : (arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController())
     w.makeKeyAndVisible(); window = w
+    if arguments.contains("--verify-capture-start"), let controller = w.rootViewController as? MimiPrototypeController {
+      captureStartup.run(controller: controller, fixture: cloudUI) { [weak self] ok, result in self?.finish(ok, result) }
+    }
     if arguments.contains("--verify-media-idle") {
       let picture = SubtitlePicture(); picture.preview.frame = CGRect(x: 0, y: 0, width: 320, height: 192); picture.layout()
       picture.showStill(); picture.original = "Static subtitles"; picture.showStill()

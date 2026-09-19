@@ -287,13 +287,33 @@ final class MimiPrototypeController: UIViewController {
   }
   private func startCloud() {
     do {
-      guard let key = try readCloudCredential() else { testingSample = false; setStatus("请先在设置中添加阿里云密钥。"); openSettings(); return }
-      log.begin(source: selection.source, target: selection.target); log.record("cloud", "connecting"); log.snapshot(running: false, pip: false, metrics: [:])
-      startPending = true; generation += 1; updateControls(); setStatus("正在连接阿里云，随后会提示你允许收音。")
+      guard try readCloudCredential() != nil else { testingSample = false; setStatus("请先在设置中添加阿里云密钥。"); openSettings(); return }
+      log.begin(source: selection.source, target: selection.target); log.snapshot(running: false, pip: false, metrics: [:])
+      // Permission can take as long as the user needs. Keep only the local
+      // receiver ready until the broadcast authenticates; an idle cloud socket
+      // can otherwise expire before any app audio reaches it.
+      if testingSample { startPending = true; generation += 1; connectCloud() }
+      else { startSession() }
+    } catch {
+      testingSample = false; updateControls(); setStatus("无法读取阿里云密钥，请在设置中检查。"); log.record("cloud", "credential_unavailable")
+    }
+  }
+  private func connectCloud() {
+    guard cloud == nil, !finishing, (running && capture.connected) || (testingSample && startPending) else { return }
+    do {
+      guard let key = try readCloudCredential() else { throw AlibabaProtocol.Failure.invalidConfiguration }
+      startPending = true; updateControls(); setStatus("正在连接阿里云同传…"); log.record("cloud", "connecting")
       let client = makeCloudClient(); cloud = client
       client.onReady = { [weak self, weak client] in
-        guard let self, let client, self.cloud === client, self.startPending else { return }
-        self.log.record("cloud", "ready"); self.startSession()
+        guard let self, let client, self.cloud === client, self.startPending, !self.finishing else { return }
+        self.log.record("cloud", "ready")
+        if self.testingSample { self.startSession() }
+        else {
+          // The receiver and its queued audio already belong to this session.
+          // Restarting it here would discard the first audio and invalidate callbacks.
+          self.startPending = false; self.updateControls()
+          self.setStatus(self.capture.state(at: ProcessInfo.processInfo.systemUptime).message)
+        }
       }
       client.onSource = { [weak self, weak client] text, final in
         guard let self, let client, self.cloud === client, self.running else { return }
@@ -316,7 +336,7 @@ final class MimiPrototypeController: UIViewController {
       }
       try client.start(key: key, source: selection.source, target: selection.target)
     } catch {
-      cloud?.stop(); cloud = nil; testingSample = false; startPending = false; updateControls(); setStatus("无法启动阿里云，请检查密钥和语言配置。"); log.record("cloud", "start_failed")
+      log.record("cloud", "start_failed"); stopSession(reason: "cloud_start_failed"); setStatus("无法启动阿里云，请检查密钥和语言配置。")
     }
   }
   private func updateControls() {
@@ -460,7 +480,9 @@ final class MimiPrototypeController: UIViewController {
         case "connecting": self.capture.connectionStarted()
         case "connected":
           self.capture.connectionReady(at: now); self.updateCaptureStatus()
-          if self.engine == .apple { self.startRecognition() }
+          if self.engine == .alibaba { self.connectCloud() }
+          else { self.startRecognition() }
+          guard self.running else { return }
           if let guide = self.captureGuide {
             self.captureGuide = nil; guide.connected { [weak self] in self?.activateCapturedMedia() }
           } else { self.activateCapturedMedia() }

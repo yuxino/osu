@@ -14,14 +14,15 @@ if [ -f "$SIM_DATA/Documents/simulator-test.json" ]; then
   mv "$SIM_DATA/Documents/simulator-test.json" "$SIM_DATA/Documents/simulator-test.previous.json"
 fi
 xcrun simctl launch "$SIM_DEVICE" com.yuxino.osu.SimulatorTests "${2:---verify-transport}"
-python3 - "$SIM_DATA/Documents/simulator-test.json" <<'PY'
+python3 - "$SIM_DATA/Documents/simulator-test.json" "${3:-20}" <<'PY'
 import json, pathlib, sys, time
 path = pathlib.Path(sys.argv[1])
-for _ in range(40):
+timeout = int(sys.argv[2])
+for _ in range(timeout * 2):
     if path.exists():
         result = json.loads(path.read_text())
         print(json.dumps(result, indent=2))
         sys.exit(0 if result['passed'] else 1)
     time.sleep(0.5)
-raise SystemExit('No fresh simulator result within 20 seconds')
+raise SystemExit(f'No fresh simulator result within {timeout} seconds')
 PY
