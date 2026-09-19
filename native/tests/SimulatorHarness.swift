@@ -21,7 +21,16 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     let arguments = ProcessInfo.processInfo.arguments
     let category = AVAudioSession.sharedInstance().category, mode = AVAudioSession.sharedInstance().mode
     w.rootViewController = arguments.contains("--capture-ui") || arguments.contains("--verify-capture-start") ? cloudUI.controller(ready: true) : (arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController())
+    if arguments.contains("--lyrics-ui") { w.rootViewController = LyricsDemoController() }
     w.makeKeyAndVisible(); window = w
+    if arguments.contains("--export-lyrics") {
+      Task { @MainActor in
+        do {
+          let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("lyrics-\(UUID().uuidString).mp4")
+          try await LyricsClipExporter.write(to: url); self.finish(true, url.lastPathComponent)
+        } catch { self.finish(false, "lyrics_export_failed") }
+      }
+    }
     if arguments.contains("--verify-capture-start"), let controller = w.rootViewController as? MimiPrototypeController {
       captureStartup.run(controller: controller, fixture: cloudUI) { [weak self] ok, result in self?.finish(ok, result) }
     }
@@ -80,5 +89,39 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
       let data = try! JSONSerialization.data(withJSONObject: ["screenRecorderAvailable": RPScreenRecorder.shared().isAvailable, "pictureInPictureSupported": AVPictureInPictureController.isPictureInPictureSupported(), "passed": passed, "result": result, "timestamp": ISO8601DateFormatter().string(from: Date()), "scope": "Production receiver/client, fixture input only; no live Alibaba, ReplayKit or Apple model acceptance"])
       try! data.write(to: url, options: .atomic)
     }
+  }
+}
+
+/// A fixed-text visual fixture. It uses the actual renderer, without capture or cloud.
+final class LyricsDemoController: UIViewController {
+  private let picture = SubtitlePicture()
+  private var ticker: Timer?
+  private var sequence = 0
+  private let lines = [
+    ("窓の外は、少しずつ明るくなってきた。", "窗外，正一点一点亮起来。"),
+    ("今日は、いつもと違う道を歩いてみよう。", "今天，走一条不一样的路吧。"),
+    ("知らない言葉も、少しずつ分かるようになる。", "陌生的话语，也会慢慢听懂。")
+  ]
+  override func viewDidLoad() {
+    super.viewDidLoad(); view.backgroundColor = .systemBackground
+    let stack = UIStackView(); stack.axis = .vertical; stack.spacing = 28; stack.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(stack)
+    NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24), stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24), stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 42)])
+    let title = UILabel(); title.text = "Osu · 歌词字幕"; title.font = .systemFont(ofSize: 28, weight: .semibold); stack.addArrangedSubview(title)
+    let note = UILabel(); note.text = "当前一句亮起，上一句轻轻退后。\n固定文字预览，不收音、不连接云端。"; note.numberOfLines = 0; note.font = .preferredFont(forTextStyle: .subheadline); note.textColor = .secondaryLabel; stack.addArrangedSubview(note)
+    stack.addArrangedSubview(picture.preview); picture.preview.heightAnchor.constraint(equalTo: picture.preview.widthAnchor, multiplier: LyricsPainter.aspect).isActive = true
+    let replay = UIButton(type: .system); replay.setTitle("重新播放示例", for: .normal); replay.addTarget(self, action: #selector(play), for: .touchUpInside); stack.addArrangedSubview(replay)
+    play()
+  }
+  override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); picture.layout() }
+  deinit { ticker?.invalidate() }
+  @objc private func play() {
+    ticker?.invalidate(); sequence = 0; picture.resetLyrics(original: "", translated: "")
+    nextLine()
+    let timer = Timer(timeInterval: 3, repeats: true) { [weak self] _ in self?.nextLine() }; ticker = timer; RunLoop.main.add(timer, forMode: .common)
+  }
+  private func nextLine() {
+    let (source, target) = lines[sequence % lines.count], id = "demo-\(sequence)"; sequence += 1
+    picture.updateOriginal(source, id: id, final: true)
+    picture.updateTranslation(target, id: id, final: true)
   }
 }

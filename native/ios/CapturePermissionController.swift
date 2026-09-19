@@ -21,7 +21,7 @@ final class CapturePermissionController: UIViewController, UIAdaptivePresentatio
     picker.accessibilityLabel = "允许收音，打开 Osu Audio 系统广播确认"
     picker.widthAnchor.constraint(equalToConstant: 64).isActive = true; picker.heightAnchor.constraint(equalToConstant: 64).isActive = true
     row.addArrangedSubview(picker); row.addArrangedSubview(UIView()); stack.addArrangedSubview(row)
-    let explanation = label("iOS 将跨 App 收音称为「屏幕广播」，每次需要你确认。Osu 只处理 App 声音，丢弃视频和麦克风数据，不保存录音或字幕。", style: .footnote)
+    let explanation = label("开始后请回到视频 App 内播放。视频小窗会替换 Osu 的字幕小窗。\n\niOS 将跨 App 收音称为「屏幕广播」，每次需要你确认。Osu 只处理 App 声音，丢弃视频和麦克风数据，不保存录音或字幕。", style: .footnote)
     explanation.textColor = .secondaryLabel; stack.addArrangedSubview(explanation)
     let cancel = UIButton(type: .system); var config = UIButton.Configuration.gray(); config.title = "暂不开启"; config.baseForegroundColor = .label; cancel.configuration = config
     cancel.addTarget(self, action: #selector(cancelPressed), for: .touchUpInside); stack.addArrangedSubview(cancel)

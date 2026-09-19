@@ -35,8 +35,8 @@ import Foundation
 
 @MainActor final class AlibabaClient {
   var onReady: (() -> Void)?
-  var onSource: ((String, Bool) -> Void)?
-  var onTranslation: ((String, Bool) -> Void)?
+  var onSource: ((String, String, Bool) -> Void)?
+  var onTranslation: ((String, String, Bool) -> Void)?
   var onFailure: ((AlibabaProtocol.Failure) -> Void)?
   var onMetric: ((Int) -> Void)?
   private var socket: RealtimeSocket?
@@ -66,8 +66,8 @@ import Foundation
           guard let self, self.active, self.generation == epoch else { return }
           switch try AlibabaProtocol.decode(data) {
           case .ready: if !self.ready { self.ready = true; self.onReady?(); self.flush() }
-          case .source(let text, let id, let final): if self.ready && self.sourceGate.accept(id: id, final: final) && !text.isEmpty { self.onSource?(text, final) }
-          case .translation(let text, let id, let final): if self.ready && self.translationGate.accept(id: id, final: final) && !text.isEmpty { self.onTranslation?(text, final) }
+          case .source(let text, let id, let final): if self.ready && self.sourceGate.accept(id: id, final: final) && !text.isEmpty { self.onSource?(text, id, final) }
+          case .translation(let text, let id, let final): if self.ready && self.translationGate.accept(id: id, final: final) && !text.isEmpty { self.onTranslation?(text, id, final) }
           case .failure(let failure): self.fail(failure); return
           case .finished: if self.finishRequested { self.completeFinish(true) } else { self.fail(.transport) }; return
           case .ignored: break

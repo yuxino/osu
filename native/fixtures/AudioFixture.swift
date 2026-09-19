@@ -40,6 +40,8 @@ final class PictureFixtureController: UIViewController {
   private let picture = SubtitlePicture()
   private let status = UILabel(), details = UILabel()
   private var timer: Timer?
+  private var lyricsTimer: Timer?
+  private var lyricSequence = 0
   private var events: [[String: Any]] = []
   override func viewDidLoad() {
     super.viewDidLoad(); view.backgroundColor = .systemBackground
@@ -47,7 +49,7 @@ final class PictureFixtureController: UIViewController {
     NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24), stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24), stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24)])
     let title = UILabel(); title.text = "Osu 字幕小窗测试"; title.font = .systemFont(ofSize: 26, weight: .semibold); stack.addArrangedSubview(title)
     picture.original = "こんにちは。今日はいい天気です。"; picture.translated = "你好，今天天气很好。"
-    stack.addArrangedSubview(picture.preview); picture.preview.heightAnchor.constraint(equalTo: picture.preview.widthAnchor, multiplier: 0.6).isActive = true
+    stack.addArrangedSubview(picture.preview); picture.preview.heightAnchor.constraint(equalTo: picture.preview.widthAnchor, multiplier: LyricsPainter.aspect).isActive = true
     status.numberOfLines = 0; status.text = "固定示例文字，不采集音频。"; stack.addArrangedSubview(status)
     for (title, action) in [("打开字幕小窗", #selector(startPicture)), ("停止小窗", #selector(stopPicture)), ("返回", #selector(close))] {
       let button = UIButton(type: .system); button.setTitle(title, for: .normal); button.addTarget(self, action: action, for: .touchUpInside); stack.addArrangedSubview(button)
@@ -65,14 +67,23 @@ final class PictureFixtureController: UIViewController {
     picture.showStill(); writeStatus()
   }
   override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); picture.layout() }
-  deinit { timer?.invalidate() }
+  deinit { timer?.invalidate(); lyricsTimer?.invalidate() }
   @objc private func startPicture() {
     do {
       try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers]); try AVAudioSession.sharedInstance().setActive(true)
       picture.start(); writeStatus()
+      if lyricsTimer == nil {
+        let lyrics = Timer(timeInterval: 3, repeats: true) { [weak self] _ in
+          guard let self else { return }
+          let lines = [("今日は、いつもと違う道を歩いてみよう。", "今天，走一条不一样的路吧。"), ("知らない言葉も、少しずつ分かるようになる。", "陌生的话语，也会慢慢听懂。")]
+          let line = lines[self.lyricSequence % lines.count], id = "fixture-\(self.lyricSequence)"; self.lyricSequence += 1
+          self.picture.updateOriginal(line.0, id: id, final: true); self.picture.updateTranslation(line.1, id: id, final: true)
+        }
+        lyricsTimer = lyrics; RunLoop.main.add(lyrics, forMode: .common)
+      }
     } catch { status.text = "Audio session failed: \((error as NSError).code)" }
   }
-  @objc private func stopPicture() { picture.stop(); try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation); writeStatus() }
+  @objc private func stopPicture() { lyricsTimer?.invalidate(); lyricsTimer = nil; picture.stop(); status.text = "字幕小窗已关闭。"; try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation); writeStatus() }
   @objc private func close() { stopPicture(); timer?.invalidate(); dismiss(animated: true) }
   private func writeStatus() {
     var state = picture.diagnostics.filter { ["possible", "supported", "frames", "mediaCreated", "layerStatus"].contains($0.key) }

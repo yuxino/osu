@@ -138,8 +138,8 @@ import Network
     } catch { completion(false, "keychain_test_failed"); return }
     let socket = FixtureRealtimeSocket(); let client = AlibabaClient(factory: { _ in socket }); self.client = client
     var ready = false, sources = 0, translations = 0
-    client.onSource = { _, final in if final { sources += 1 } }
-    client.onTranslation = { _, final in if final { translations += 1 } }
+    client.onSource = { _, id, final in if final && id == "test1" { sources += 1 } }
+    client.onTranslation = { _, id, final in if final && id == "response1" { translations += 1 } }
     client.onFailure = { _ in completion(false, "fixture_client_failed") }
     client.onReady = { [weak self, weak client] in
       guard let self, let client else { return }; ready = true
@@ -168,7 +168,7 @@ import Network
       var factories = 0, ready = 0, sources = 0, failures = 0
       let client = AlibabaClient(factory: { _ in factories += 1; return factories == 1 ? old : fresh })
       retained = client
-      client.onReady = { ready += 1 }; client.onSource = { _, _ in sources += 1 }; client.onFailure = { _ in failures += 1 }
+      client.onReady = { ready += 1 }; client.onSource = { _, _, _ in sources += 1 }; client.onFailure = { _ in failures += 1 }
       do {
         try client.start(key: "fixture-only", source: "ja", target: "zh"); client.stop()
         try client.start(key: "fixture-only", source: "ja", target: "zh")

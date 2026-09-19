@@ -83,6 +83,7 @@ final class MimiPrototypeController: UIViewController {
   private var heartbeat: Timer?
   private var lastAudio = Date.distantPast, lastRotation = Date(), sessionStarted = Date(), lastJournal = Date.distantPast
   private var translationBusy = false
+  private let pictureStoppedMessage = "字幕小窗已关闭，收音也已停止。iPhone 的视频小窗会替换字幕小窗；使用 Osu 时，请将视频留在原 App 内播放。"
 
   // The isolated simulator harness substitutes an in-memory socket and dummy key.
   // Normal app startup uses the fixed provider endpoint and device Keychain.
@@ -180,7 +181,7 @@ final class MimiPrototypeController: UIViewController {
     configureChoice(sourceButton); configureChoice(targetButton)
     let languages = UIStackView(arrangedSubviews: [sourceButton, targetButton]); languages.axis = .horizontal; languages.spacing = 10; languages.distribution = .fillEqually; stack.addArrangedSubview(languages)
     picture.original = "播放一段你想听懂的内容"; picture.translated = "字幕会出现在这里"
-    stack.addArrangedSubview(picture.preview); picture.preview.heightAnchor.constraint(equalTo: picture.preview.widthAnchor, multiplier: 0.60).isActive = true
+    stack.addArrangedSubview(picture.preview); picture.preview.heightAnchor.constraint(equalTo: picture.preview.widthAnchor, multiplier: LyricsPainter.aspect).isActive = true
     status.numberOfLines = 0; status.font = UIFont.preferredFont(forTextStyle: .subheadline); status.adjustsFontForContentSizeCategory = true; status.textColor = .secondaryLabel; status.text = selection.source == "auto" ? CaptureReadiness.State.idle.message : "准备好了就开始。声音语言可在上方随时调整。"; stack.addArrangedSubview(status)
     prepareButton = button("准备本地语言包", #selector(prepareLanguages)); stack.addArrangedSubview(prepareButton)
     startButton = button("开始听", #selector(primaryPressed)); var primary = UIButton.Configuration.filled(); primary.baseBackgroundColor = .label; primary.baseForegroundColor = .systemBackground; primary.cornerStyle = .medium; primary.contentInsets = .init(top: 18, leading: 24, bottom: 18, trailing: 24); primary.title = "开始听"; primary.image = UIImage(systemName: "waveform"); primary.imagePadding = 10; startButton.configurationUpdateHandler = nil; startButton.configuration = primary; stack.addArrangedSubview(startButton)
@@ -325,15 +326,15 @@ final class MimiPrototypeController: UIViewController {
           self.setStatus(self.capture.state(at: ProcessInfo.processInfo.systemUptime).message)
         }
       }
-      client.onSource = { [weak self, weak client] text, final in
+      client.onSource = { [weak self, weak client] text, id, final in
         guard let self, let client, self.cloud === client, self.running else { return }
-        self.recognitionUpdates += 1; self.transcript.text = text; self.picture.original = text
+        self.recognitionUpdates += 1; self.transcript.text = text; self.picture.updateOriginal(text, id: id, final: final)
         if self.recognitionUpdates == 1 { self.log.record("cloud", "first_source") }
         if final { self.sourceFinals += 1; self.log.record("cloud", "source_final") }
       }
-      client.onTranslation = { [weak self, weak client] text, final in
+      client.onTranslation = { [weak self, weak client] text, id, final in
         guard let self, let client, self.cloud === client, self.running else { return }
-        self.translationUpdates += 1; self.translation.text = text; self.picture.translated = text
+        self.translationUpdates += 1; self.translation.text = text; self.picture.updateTranslation(text, id: id, final: final)
         if self.translationUpdates == 1 { self.log.record("cloud", "first_translation") }
         if final { self.translationFinals += 1; self.log.record("cloud", "translation_final") }
       }
@@ -577,7 +578,8 @@ final class MimiPrototypeController: UIViewController {
     } catch { log.record("transport", "start_failed", error: error); receiver.stop(); cloud?.stop(); cloud = nil; testingSample = false; updateControls(); setStatus("无法准备收音，错误已写入诊断。"); return }
     capture.start(); lastCaptureState = .idle; running = true; sourceFinals = 0; translationFinals = 0; cloudBytes = 0; receivedFrames = 0; seconds = 0; peak = 0; recognitionUpdates = 0; translationUpdates = 0; recognitionRestarts = 0; translationMS = 0; newest = ""; lastTranslated = ""; translationBusy = false; sessionStarted = Date(); lastAudio = .distantPast; lastJournal = .distantPast
     if !testingSample { beginCaptureHandoff() }
-    transcript.text = "原文等待中"; translation.text = selection.target.isEmpty ? "仅显示原文" : "译文等待中"; picture.original = "等待其他 App 的声音"; picture.translated = selection.target.isEmpty ? "仅显示原文" : "等待翻译"
+    transcript.text = "原文等待中"; translation.text = selection.target.isEmpty ? "仅显示原文" : "译文等待中"
+    picture.resetLyrics(original: "等待其他 App 的声音", translated: selection.target.isEmpty ? "仅显示原文" : "等待翻译", translationEnabled: !selection.target.isEmpty)
     updateControls(); updateCounts(); updateCaptureStatus()
     heartbeat = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
     log.record("session", "waiting_for_broadcast"); picture.showStill(); writeSnapshot(); if testingSample { beginSample() }
@@ -685,6 +687,10 @@ final class MimiPrototypeController: UIViewController {
       let completedSample = sample && reason == "sample_complete"
       if sample { self.log.record("cloud", completedSample ? (sampleOK ? "synthetic_sample_passed" : "synthetic_sample_incomplete") : "synthetic_sample_stopped", metrics: self.metrics) }
       self.stopSession(reason: reason)
+      if reason == "pip_closed" {
+        self.setStatus(self.pictureStoppedMessage + (confirmed ? "" : "部分末句可能未返回。"))
+        return
+      }
       self.setStatus(completedSample ? (sampleOK ? "测试完成，已收到完整原文和译文。" : "测试结束，末句未完整返回，可重试。") : (confirmed ? (reason == "broadcast_ended" ? "广播已停止，最后的字幕留在这里。" : (self.recognitionUpdates > 0 ? "已结束，最后的字幕留在这里。" : "已结束，收音已停止。")) : "已停止，部分末句可能未返回。"))
     }
   }
@@ -703,7 +709,7 @@ final class MimiPrototypeController: UIViewController {
     picture.stop()
     if mediaActive { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation); mediaActive = false }
     log.record("session", reason, metrics: metrics); writeSnapshot(); updateControls(); updateCounts()
-    setStatus("已停止。准备好了就再开始。")
+    setStatus(reason == "pip_closed" ? pictureStoppedMessage : "已停止。准备好了就再开始。")
     refreshLanguages()
   }
   private func setStatus(_ text: String) { status.text = text }

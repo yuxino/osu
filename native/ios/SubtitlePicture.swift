@@ -3,16 +3,20 @@ import AVKit
 
 final class SubtitlePreviewView: UIView {
   var onLayout: (() -> Void)?
+  var onDraw: ((CGContext, CGRect) -> Void)?
   override func layoutSubviews() { super.layoutSubviews(); onLayout?() }
+  override func draw(_ rect: CGRect) { if let context = UIGraphicsGetCurrentContext() { onDraw?(context, bounds) } }
 }
 
 final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDelegate, AVPictureInPictureControllerDelegate {
   let preview = SubtitlePreviewView()
   private var layer: AVSampleBufferDisplayLayer?
-  private let still = UIView()
-  private let stillOriginal = UILabel(), stillTranslated = UILabel()
   private var pip: AVPictureInPictureController?
   private var timer: Timer?
+  private var animationTimer: Timer?
+  private var transitionStarted = -Double.infinity
+  private var sourceTrack = LyricTrack(), translationTrack = LyricTrack()
+  private var translationEnabled = true
   private var wantsPicture = false
   private var starting = false
   private var stopping = false
@@ -22,11 +26,43 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   var translated = "字幕会出现在这里" { didSet { updateAccessibility() } }
   private func updateAccessibility() {
     preview.accessibilityLabel = "字幕"; preview.accessibilityValue = original + "\n" + translated
-    updateStillText()
+    preview.setNeedsDisplay()
   }
   func showStill() {
-    updateStillText()
-    if timer == nil { still.isHidden = false } else { render() }
+    preview.setNeedsDisplay()
+    if timer != nil { render() }
+  }
+  func resetLyrics(original: String, translated: String, translationEnabled: Bool = true) {
+    animationTimer?.invalidate(); animationTimer = nil; transitionStarted = -Double.infinity
+    sourceTrack = LyricTrack(); translationTrack = LyricTrack(); self.translationEnabled = translationEnabled
+    self.original = original; self.translated = translated
+  }
+  func updateOriginal(_ text: String, id: String, final: Bool) {
+    let advances = sourceTrack.update(text, id: id, final: final)
+    original = sourceTrack.current?.text ?? original
+    if advances && !translationEnabled { animateNextLine() }
+  }
+  func updateTranslation(_ text: String, id: String, final: Bool) {
+    let advances = translationTrack.update(text, id: id, final: final)
+    translated = translationTrack.current?.text ?? translated
+    if advances && translationEnabled { animateNextLine() }
+  }
+  private func animateNextLine() {
+    animationTimer?.invalidate(); animationTimer = nil
+    guard !UIAccessibility.isReduceMotionEnabled else { transitionStarted = -Double.infinity; showStill(); return }
+    transitionStarted = CACurrentMediaTime()
+    // Smooth frames only during a 360 ms line change; idle PiP stays at 2 fps.
+    let animation = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] timer in
+      guard let self else { timer.invalidate(); return }
+      self.showStill()
+      if CACurrentMediaTime() - self.transitionStarted >= 0.36 { timer.invalidate(); self.animationTimer = nil }
+    }
+    animationTimer = animation; RunLoop.main.add(animation, forMode: .common); showStill()
+  }
+  private func drawLyrics(in context: CGContext, bounds: CGRect) {
+    let track = translationEnabled ? translationTrack : sourceTrack
+    let progress = UIAccessibility.isReduceMotionEnabled ? 1 : CGFloat(min(1, (CACurrentMediaTime() - transitionStarted) / 0.36))
+    LyricsPainter.draw(in: context, bounds: bounds, previous: track.previous?.text ?? "", current: translationEnabled ? translated : original, original: translationEnabled ? original : "", progress: progress)
   }
   var onEvent: ((String, Error?) -> Void)?
   var onStatus: ((String) -> Void)?
@@ -40,16 +76,17 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
     preview.layer.cornerRadius = 20
     preview.clipsToBounds = true
     preview.onLayout = { [weak self] in self?.layout() }
-    // A native still remains readable when the timed video layer has no live frames.
-    still.backgroundColor = .black; still.isUserInteractionEnabled = false; preview.addSubview(still)
-    for label in [stillOriginal, stillTranslated] { label.numberOfLines = 0; label.lineBreakMode = .byWordWrapping; label.adjustsFontForContentSizeCategory = true; still.addSubview(label) }
-    stillOriginal.font = UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: 15)); stillOriginal.textColor = UIColor(white: 0.68, alpha: 1)
-    stillTranslated.font = UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: 22, weight: .semibold)); stillTranslated.textColor = .white
+    preview.onDraw = { [weak self] context, bounds in
+      // The sample-buffer layer supplies its own inline image / PiP placeholder.
+      // Keep the idle drawing out of that layer's background to avoid double text.
+      guard let self, self.layer == nil else { return }
+      self.drawLyrics(in: context, bounds: bounds)
+    }
   }
-  // Opening Osu only displays labels. Register a media source after broadcast authorization.
+  // Opening Osu only draws native text. Register media after broadcast authorization.
   private func prepareMedia() {
     guard layer == nil else { return }
-    let layer = AVSampleBufferDisplayLayer(); self.layer = layer
+    let layer = AVSampleBufferDisplayLayer(); self.layer = layer; preview.setNeedsDisplay()
     layer.videoGravity = .resizeAspect; preview.layer.insertSublayer(layer, at: 0); layer.frame = preview.bounds
     var timebase: CMTimebase?
     CMTimebaseCreateWithSourceClock(allocator: kCFAllocatorDefault, sourceClock: CMClockGetHostTimeClock(), timebaseOut: &timebase)
@@ -67,40 +104,12 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
       }
     }
   }
-  deinit { timer?.invalidate() }
+  deinit { timer?.invalidate(); animationTimer?.invalidate() }
   func layout() {
-    layer?.frame = preview.bounds; still.frame = preview.bounds
-    let width = max(0, preview.bounds.width - 32), height = preview.bounds.height
-    stillOriginal.frame = CGRect(x: 16, y: 16, width: width, height: height * 0.35)
-    stillTranslated.frame = CGRect(x: 16, y: height * 0.45, width: width, height: height * 0.48)
-    updateStillText()
-  }
-  private func updateStillText() {
-    for (label, text) in [(stillOriginal, original), (stillTranslated, translated)] {
-      guard label.bounds.width > 0, label.bounds.height > 0 else { continue }
-      label.text = fittingTail(text, size: label.bounds.size, attributes: [.font: label.font!])
-    }
-  }
-  // Keep the newest words together instead of truncating the final line mid-word.
-  private func fittingTail(_ text: String, size: CGSize, attributes: [NSAttributedString.Key: Any]) -> String {
-    var visible = String(text.suffix(400)), clipped = text.count > 400
-    func removeLeadingWord() {
-      if let split = visible.firstIndex(where: { $0.isWhitespace }), visible.distance(from: visible.startIndex, to: split) < 32 {
-        visible = String(visible[visible.index(after: split)...]).trimmingCharacters(in: .whitespacesAndNewlines)
-      } else { visible.removeFirst() }
-    }
-    if clipped, !visible.isEmpty { removeLeadingWord() }
-    while !visible.isEmpty {
-      let candidate = clipped ? "… " + visible : visible
-      let measured = (candidate as NSString).boundingRect(with: CGSize(width: size.width, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attributes, context: nil)
-      if ceil(measured.height) <= floor(size.height) { return candidate }
-      removeLeadingWord(); clipped = true
-    }
-    return ""
+    layer?.frame = preview.bounds; preview.setNeedsDisplay()
   }
   private func prime() {
     prepareMedia()
-    still.isHidden = true
     guard timer == nil else { return }
     render()
     let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in self?.render(); self?.attemptStart() }
@@ -108,6 +117,7 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
     pip?.invalidatePlaybackState()
   }
   func start() {
+    guard !active || stopping else { onStatus?("字幕小窗已开启"); return }
     wantsPicture = true
     guard !stopping else { return }
     prime()
@@ -124,9 +134,10 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   }
   func stop() {
     wantsPicture = false; timer?.invalidate(); timer = nil
+    animationTimer?.invalidate(); animationTimer = nil; transitionStarted = -Double.infinity
     pip?.invalidatePlaybackState()
     if let timebase = layer?.controlTimebase { CMTimebaseSetRate(timebase, rate: 0) }
-    layer?.flushAndRemoveImage(); still.isHidden = false
+    layer?.flushAndRemoveImage(); preview.setNeedsDisplay()
     if active || starting { stopping = true; pip?.stopPictureInPicture() } else { releaseMedia() }
   }
   private func releaseMedia() {
@@ -140,30 +151,21 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
 
   private func render() {
     guard let layer else { return }
-    let width = 960, height = 576
+    let width = Int(LyricsPainter.size.width), height = Int(LyricsPainter.size.height)
     var pixel: CVPixelBuffer?
     let attrs: [CFString: Any] = [kCVPixelBufferCGImageCompatibilityKey: true, kCVPixelBufferCGBitmapContextCompatibilityKey: true, kCVPixelBufferIOSurfacePropertiesKey: [:]]
     guard CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pixel) == kCVReturnSuccess, let pixel else { return }
     CVPixelBufferLockBaseAddress(pixel, [])
     guard let context = CGContext(data: CVPixelBufferGetBaseAddress(pixel), width: width, height: height, bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(pixel), space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue) else { CVPixelBufferUnlockBaseAddress(pixel, []); return }
-    context.setFillColor(UIColor.black.cgColor); context.fill(CGRect(x: 0, y: 0, width: width, height: height))
     context.translateBy(x: 0, y: CGFloat(height)); context.scaleBy(x: 1, y: -1)
     UIGraphicsPushContext(context)
-    let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .left; paragraph.lineBreakMode = .byWordWrapping; paragraph.lineSpacing = 7
-    func drawLatest(_ text: String, rect: CGRect, font: UIFont, color: UIColor) {
-      let scaledFont = UIFontMetrics.default.scaledFont(for: font, maximumPointSize: font.pointSize * 1.6)
-      let attributes: [NSAttributedString.Key: Any] = [.font: scaledFont, .foregroundColor: color, .paragraphStyle: paragraph]
-      let visible = fittingTail(text, size: rect.size, attributes: attributes)
-      (visible as NSString).draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attributes, context: nil)
-    }
-    drawLatest(original, rect: CGRect(x: 46, y: 44, width: 868, height: 175), font: .systemFont(ofSize: 40, weight: .regular), color: UIColor(white: 0.68, alpha: 1))
-    drawLatest(translated, rect: CGRect(x: 46, y: 255, width: 868, height: 260), font: .systemFont(ofSize: 59, weight: .semibold), color: .white)
+    drawLyrics(in: context, bounds: CGRect(origin: .zero, size: LyricsPainter.size))
     UIGraphicsPopContext(); CVPixelBufferUnlockBaseAddress(pixel, [])
     var description: CMVideoFormatDescription?
     CMVideoFormatDescriptionCreateForImageBuffer(allocator: kCFAllocatorDefault, imageBuffer: pixel, formatDescriptionOut: &description)
     guard let description else { return }
     let now = layer.controlTimebase.map { CMTimebaseGetTime($0) } ?? CMTime(value: frame, timescale: 2)
-    var timing = CMSampleTimingInfo(duration: CMTime(value: 1, timescale: 2), presentationTimeStamp: now, decodeTimeStamp: .invalid)
+    var timing = CMSampleTimingInfo(duration: CMTime(value: 1, timescale: animationTimer == nil ? 2 : 30), presentationTimeStamp: now, decodeTimeStamp: .invalid)
     var sample: CMSampleBuffer?
     CMSampleBufferCreateReadyWithImageBuffer(allocator: kCFAllocatorDefault, imageBuffer: pixel, formatDescription: description, sampleTiming: &timing, sampleBufferOut: &sample)
     if layer.status == .failed { layer.flush() }
@@ -197,7 +199,7 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
     guard pip === pictureInPictureController else { return }
     let programmatic = stopping; stopping = false; onEvent?("stopped", nil)
     let restart = wantsPicture
-    timer?.invalidate(); timer = nil; releaseMedia(); still.isHidden = false
+    timer?.invalidate(); timer = nil; releaseMedia(); preview.setNeedsDisplay()
     if restart { start() } else if !programmatic { onClosed?() }
   }
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) { completionHandler(false) }
