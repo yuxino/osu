@@ -54,6 +54,7 @@ final class MimiPrototypeController: UIViewController {
   private var lastCaptureState = CaptureReadiness.State.idle
   private var captureGuide: CapturePermissionController?
   private var mediaActive = false
+  private var captureHandoffTask: UIBackgroundTaskIdentifier = .invalid
   private let picture = SubtitlePicture()
   private let receiver = AudioReceiver()
   private let log = DiagnosticStore.shared
@@ -104,7 +105,10 @@ final class MimiPrototypeController: UIViewController {
     log.snapshot(running: false, pip: false, metrics: [:])
     buildHome()
     picture.onStatus = { [weak self] text in if self?.capture.connected == true { self?.setStatus(text) } }
-    picture.onEvent = { [weak self] event, error in self?.log.record("pip", event, error: error) }
+    picture.onEvent = { [weak self] event, error in
+      self?.log.record("pip", event, error: error)
+      if event == "started" { self?.endCaptureHandoff() }
+    }
     picture.onClosed = { [weak self] in self?.finishSession(reason: "pip_closed") }
     for name in [UIApplication.didEnterBackgroundNotification, UIApplication.didBecomeActiveNotification, AVAudioSession.interruptionNotification, UIContentSizeCategory.didChangeNotification] {
       observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
@@ -116,7 +120,13 @@ final class MimiPrototypeController: UIViewController {
           let foreground = note.name == UIApplication.didBecomeActiveNotification
           self.log.record("app", foreground ? "foreground" : "background")
           if foreground && !self.running && !self.startPending && !self.downloading { self.refreshLanguages() }
-          if foreground && self.running && !self.testingSample && self.capture.state(at: ProcessInfo.processInfo.systemUptime) == .needsBroadcast { self.showCaptureGuide() }
+          if foreground && self.running && !self.testingSample && !self.finishing && !self.capture.connected {
+            self.beginCaptureHandoff()
+            do {
+              if try self.receiver.refreshUnconnectedListener() { self.capture.start(); self.updateCaptureStatus(); self.log.record("transport", "listener_refreshed_after_resume") }
+              self.showCaptureGuide()
+            } catch { self.stopSession(reason: "receiver_resume_failed"); self.setStatus("无法恢复收音连接，请重新开始。") }
+          }
         }
       })
     }
@@ -529,6 +539,25 @@ final class MimiPrototypeController: UIViewController {
     if engine == .apple && request == nil { startRecognition() }
     picture.start(); updateControls()
   }
+  private func beginCaptureHandoff() {
+    guard captureHandoffTask == .invalid else { return }
+    captureHandoffTask = UIApplication.shared.beginBackgroundTask(withName: "Connect Osu Audio") { [weak self] in
+      guard let self else { return }
+      self.endCaptureHandoff()
+      guard self.running, !self.testingSample else { return }
+      self.log.record("capture", "handoff_expired")
+      if self.capture.connected {
+        self.stopSession(reason: "picture_handoff_expired"); self.setStatus("字幕小窗未能开启，收音已停止。请回到 Osu 重新开始。")
+      } else {
+        self.receiver.stop(); self.capture.start(); self.updateCaptureStatus()
+      }
+    }
+  }
+  private func endCaptureHandoff() {
+    guard captureHandoffTask != .invalid else { return }
+    let task = captureHandoffTask; captureHandoffTask = .invalid
+    UIApplication.shared.endBackgroundTask(task)
+  }
   private func startSession() {
     startPending = false
     if engine == .apple {
@@ -547,6 +576,7 @@ final class MimiPrototypeController: UIViewController {
       if !testingSample { try receiver.start() }
     } catch { log.record("transport", "start_failed", error: error); receiver.stop(); cloud?.stop(); cloud = nil; testingSample = false; updateControls(); setStatus("无法准备收音，错误已写入诊断。"); return }
     capture.start(); lastCaptureState = .idle; running = true; sourceFinals = 0; translationFinals = 0; cloudBytes = 0; receivedFrames = 0; seconds = 0; peak = 0; recognitionUpdates = 0; translationUpdates = 0; recognitionRestarts = 0; translationMS = 0; newest = ""; lastTranslated = ""; translationBusy = false; sessionStarted = Date(); lastAudio = .distantPast; lastJournal = .distantPast
+    if !testingSample { beginCaptureHandoff() }
     transcript.text = "原文等待中"; translation.text = selection.target.isEmpty ? "仅显示原文" : "译文等待中"; picture.original = "等待其他 App 的声音"; picture.translated = selection.target.isEmpty ? "仅显示原文" : "等待翻译"
     updateControls(); updateCounts(); updateCaptureStatus()
     heartbeat = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
@@ -643,6 +673,7 @@ final class MimiPrototypeController: UIViewController {
   }
   private func finishSession(reason: String) {
     guard running && !finishing && (capture.connected || testingSample || reason == "broadcast_ended") && engine == .alibaba, let client = cloud else { stopSession(reason: reason); return }
+    endCaptureHandoff()
     let epoch = generation, sample = testingSample
     finishing = true; receiver.stop(); audioDelivery?.cancel(); capture.stop(); sampleTest.cancel(); sampleTimer?.invalidate(); sampleTimer = nil; sampleData.removeAll(); picture.stop()
     if mediaActive { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation); mediaActive = false }
@@ -659,6 +690,7 @@ final class MimiPrototypeController: UIViewController {
   }
   private func stopSession(reason: String) {
     let wasPending = startPending
+    endCaptureHandoff()
     if let guide = captureGuide { captureGuide = nil; guide.connected {} }
     audioDelivery?.cancel(); audioDelivery = nil; capture.stop()
     testingSample = false; finishing = false; sampleTest.cancel(); sampleTimer?.invalidate(); sampleTimer = nil; sampleData.removeAll()

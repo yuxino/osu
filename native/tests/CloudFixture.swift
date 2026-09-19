@@ -73,6 +73,9 @@ import Network
         try press("开始听", in: controller.view)
         try await Task.sleep(nanoseconds: 45_000_000_000)
         guard fixture.sockets.isEmpty, let guide = controller.presentedViewController as? CapturePermissionController else { throw failure("permission_wait_created_cloud_or_lost_guide") }
+        NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        guard fixture.sockets.isEmpty, controller.presentedViewController === guide else { throw failure("resume_changed_permission_session") }
         try press("暂不开启", in: guide.view)
         try await Task.sleep(nanoseconds: 700_000_000)
         guard fixture.sockets.isEmpty, controller.presentedViewController == nil else { throw failure("permission_cancel_did_not_stay_local") }
@@ -85,6 +88,7 @@ import Network
         try await send(["key": MimiWire.key, "event": "started", "audio": Data([0, 1, 2, 3]).base64EncodedString()], to: connection)
         try await Task.sleep(nanoseconds: 700_000_000)
         guard fixture.sockets.count == 1, fixture.sockets[0].sentAudio == 1 else { throw failure("first_authenticated_audio_lost") }
+        NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
         try await send(["key": MimiWire.key, "event": "heartbeat", "audio": Data([4, 5, 6, 7]).base64EncodedString()], to: connection)
         try await Task.sleep(nanoseconds: 300_000_000)
         guard fixture.sockets.count == 1, fixture.sockets[0].sentAudio == 2 else { throw failure("cloud_ready_restarted_receiver") }
@@ -92,7 +96,7 @@ import Network
         try await Task.sleep(nanoseconds: 700_000_000)
         guard fixture.sockets[0].closed, fixture.sockets[0].sentFinish == 1 else { throw failure("capture_stop_did_not_close_cloud") }
         connection.cancel(); self.connection = nil
-        completion(true, "wait_45s_cancel_without_cloud_then_authenticated_audio_and_finish")
+        completion(true, "wait_45s_resume_cancel_then_authenticated_audio_resume_and_finish")
       } catch {
         connection?.cancel(); connection = nil
         completion(false, (error as NSError).domain)

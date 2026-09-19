@@ -28,8 +28,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
       self.log.record("broadcast", "started")
       let c = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: 49371)!, using: .tcp)
       self.connection = c
-      c.stateUpdateHandler = { [weak self] state in
-        guard let self else { return }
+      c.stateUpdateHandler = { [weak self, weak c] state in
+        guard let self, let c, self.connection === c, !self.stopped else { return }
         switch state {
         case .ready:
           self.ready = true
@@ -37,6 +37,14 @@ final class SampleHandler: RPBroadcastSampleHandler {
           self.sendEvent("started")
           self.startPump()
           self.watchHost(c)
+        case .waiting(let error):
+          self.log.record("transport", "waiting", error: error)
+          // The host may just be returning from the system picker or lock screen.
+          // Retry the local connection within the existing eight-second deadline.
+          self.queue.asyncAfter(deadline: .now() + 0.5) { [weak self, weak c] in
+            guard let self, let c, self.connection === c, !self.stopped, case .waiting = c.state else { return }
+            c.restart()
+          }
         case .failed(let error): self.log.record("transport", "failed", error: error); self.end("字幕接收器不可用：\(error.localizedDescription)")
         default: break
         }
@@ -44,7 +52,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
       c.start(queue: self.queue)
       self.queue.asyncAfter(deadline: .now() + 8) { [weak self] in
         guard let self, !self.ready, !self.stopped else { return }
-        self.log.record("transport", "host_timeout"); self.end("请先在 Osu 中点「开始听」，再允许收音。")
+        self.log.record("transport", "host_timeout"); self.end("收音未能接通，已停止。请回到 Osu 重新开始。")
       }
     }
   }

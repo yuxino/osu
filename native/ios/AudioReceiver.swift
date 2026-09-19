@@ -38,6 +38,17 @@ final class AudioReceiver {
       listener.start(queue: queue)
     }
   }
+  // iOS may reclaim a suspended app's listener without a failure callback.
+  // An attaching peer is preserved when the system picker returns to the app.
+  @discardableResult func refreshUnconnectedListener() throws -> Bool {
+    let restart = queue.sync {
+      guard self.peer == nil else { return false }
+      self.listener?.cancel(); self.listener = nil
+      return true
+    }
+    if restart { try start() }
+    return restart
+  }
   func stop() { queue.sync { self.listener?.cancel(); self.listener = nil; self.peer?.cancel(); self.peer = nil; self.decoder = AudioPacketDecoder(key: MimiWire.key); self.authenticated = false } }
   private func close(_ c: NWConnection) { c.cancel(); if peer === c { peer = nil; decoder = AudioPacketDecoder(key: MimiWire.key); authenticated = false } }
   private func read(_ c: NWConnection) {
