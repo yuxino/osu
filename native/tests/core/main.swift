@@ -70,3 +70,62 @@ check(preview.accept(id: "utterance1", final: false) && preview.accept(id: "utte
 check(!preview.accept(id: "utterance1", final: false) && !preview.accept(id: "utterance1", final: true), "late drafts and duplicate finals cannot replace final")
 check(preview.accept(id: "utterance2", final: true), "repeated text in a new utterance is not globally suppressed")
 print("Alibaba protocol checks passed.")
+
+var capture = CaptureReadiness()
+check(capture.state(at: 0) == .idle, "new capture never trusts a previous running snapshot")
+capture.start(); check(capture.state(at: 0) == .preparing, "preparing is distinct from capturing")
+capture.receiverReady(); check(capture.state(at: 1) == .needsBroadcast, "ready listener still requires user broadcast authorization")
+capture.connectionStarted(); check(capture.state(at: 2) == .connecting, "unauthenticated connection is not receiving")
+capture.connectionReady(at: 3); check(capture.state(at: 3) == .waitingForAudio, "broadcast connection alone does not imply audio")
+capture.audio(peak: 0, at: 4); check(capture.state(at: 4) == .silent, "silent PCM is not confused with missing broadcast")
+capture.audio(peak: 0.1, at: 5); check(capture.state(at: 5) == .receiving, "audible PCM marks active reception")
+capture.audio(peak: 0, at: 6); check(capture.state(at: 6) == .receiving, "a brief speech pause does not flicker to silence")
+capture.audio(peak: 0, at: 10); check(capture.state(at: 10) == .silent, "sustained silence shown after hold period")
+capture.heartbeat(at: 16); check(capture.state(at: 16) == .waitingForAudio, "live heartbeat without PCM remains connected")
+capture.setPaused(true, at: 17); check(capture.state(at: 17) == .paused, "broadcast pause is explicit")
+capture.setPaused(false, at: 18); check(capture.state(at: 18) == .waitingForAudio, "resume does not invent audio")
+check(capture.state(at: 25) == .lost, "missing heartbeat expires stale connection")
+capture.stop(); check(capture.state(at: 25) == .stopped, "stopped broadcast immediately clears connection")
+capture.start(); capture.receiverReady(); check(capture.state(at: 26) == .needsBroadcast, "new session cannot reuse old permission or audio evidence")
+
+var backlog = PCMBacklog(), referencePCM = Data(), deliveredPCM = Data()
+// Uneven ReplayKit chunks plus a 400 ms slow consumer; compare every byte, not just counts.
+for index in 0..<4000 {
+  let chunk = Data((0..<(index % 3 + 1) * 232).map { UInt8(($0 + index) % 256) })
+  try backlog.append(chunk); referencePCM.append(chunk)
+  if index % 20 == 19 { while let batch = backlog.take() { deliveredPCM.append(batch) } }
+}
+while let batch = backlog.take() { deliveredPCM.append(batch) }
+check(deliveredPCM == referencePCM, "4000 variable audio chunks survive simulated backpressure byte for byte")
+try backlog.append(Data(repeating: 1, count: 64000))
+do { try backlog.append(Data([2, 3])); check(false, "PCM overflow must throw") } catch {}
+check(backlog.count == 64000, "overflow neither corrupts nor silently replaces queued audio")
+backlog.clear(); check(backlog.take() == nil, "stopping clears pending PCM")
+let delivery = PCMDeliveryBuffer()
+var delivered = Data()
+var scheduledOnce = true
+for index in 0..<60 {
+  let result = delivery.append(Data(repeating: UInt8(index), count: 800))
+  scheduledOnce = scheduledOnce && (index == 0 ? result == .schedule : result == .buffered)
+}
+check(scheduledOnce, "main queue gets only one scheduled drain under backpressure")
+while let chunk = delivery.next() { delivered.append(chunk) }
+check(delivered == (0..<60).reduce(into: Data()) { $0.append(Data(repeating: UInt8($1), count: 800)) }, "busy main thread retains 1.5 seconds in correct order")
+check(delivery.append(Data([1, 2])) == .schedule, "drain re-arms after empty queue")
+delivery.cancel(); check(delivery.next() == nil && delivery.append(Data([3, 4])) == .closed, "cancel prevents stale-session audio delivery")
+let overloaded = PCMDeliveryBuffer(); _ = overloaded.append(Data(repeating: 0, count: 64000))
+check(overloaded.append(Data([0, 0])) == .overflow && overloaded.next() == nil, "host overflow is explicit and bounded")
+var heartbeatParser = AudioPacketDecoder(key: "test-key")
+check(try heartbeatParser.append(packet(["key": "test-key", "event": "heartbeat"]))[0].event == "heartbeat", "broadcast heartbeat needs no audio payload")
+
+let defaultsName = "Osu.Tests.\(UUID().uuidString)"
+let defaults = UserDefaults(suiteName: defaultsName)!
+defer { defaults.removePersistentDomain(forName: defaultsName) }
+defaults.set("apple", forKey: "mimi.engine"); defaults.set("en-US", forKey: "mimi.source")
+SubtitleDefaults.migrate(defaults)
+check(defaults.string(forKey: "mimi.engine") == "alibaba" && defaults.string(forKey: "mimi.alibaba.source") == "auto" && defaults.string(forKey: "mimi.alibaba.target") == "zh", "old English demo default migrates to automatic recognition and Chinese subtitles")
+defaults.set("ja", forKey: "mimi.alibaba.source"); SubtitleDefaults.migrate(defaults)
+check(defaults.string(forKey: "mimi.alibaba.source") == "ja", "deliberate manual override survives subsequent launches")
+check(LanguageSelection(source: "zh-CN", target: "zh-Hans").localSelection.target.isEmpty, "same-language Apple selection becomes original-only instead of unsupported")
+check(LanguageSelection(source: "ja-JP", target: "zh-Hans").localSelection.target == "zh-Hans", "different source and target retain translation")
+print("Capture, buffering and automatic-language checks passed.")

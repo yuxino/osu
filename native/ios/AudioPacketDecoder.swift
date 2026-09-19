@@ -19,7 +19,7 @@ struct AudioPacketDecoder {
       let line = bytes.prefix(upTo: end); bytes.removeSubrange(...end)
       guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any], object["key"] as? String == key else { throw Failure.invalid }
       let event = object["event"] as? String
-      if let event, !["started", "paused", "resumed", "conversion_failed"].contains(event) { throw Failure.invalid }
+      if let event, !["started", "heartbeat", "paused", "resumed", "conversion_failed"].contains(event) { throw Failure.invalid }
       var audio: Data?
       if let encoded = object["audio"] as? String {
         guard let raw = Data(base64Encoded: encoded), !raw.isEmpty, raw.count <= 32768, raw.count % 2 == 0 else { throw Failure.invalid }

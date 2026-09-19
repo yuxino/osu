@@ -17,8 +17,19 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
   private let queue = DispatchQueue(label: "mimi.simulator.tests")
   func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
     let w = UIWindow(frame: UIScreen.main.bounds)
-    w.rootViewController = ProcessInfo.processInfo.arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController()
+    let arguments = ProcessInfo.processInfo.arguments
+    let category = AVAudioSession.sharedInstance().category, mode = AVAudioSession.sharedInstance().mode
+    w.rootViewController = arguments.contains("--capture-ui") ? cloudUI.controller(ready: true) : (arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController())
     w.makeKeyAndVisible(); window = w
+    if arguments.contains("--verify-media-idle") {
+      let picture = SubtitlePicture(); picture.preview.frame = CGRect(x: 0, y: 0, width: 320, height: 192); picture.layout()
+      picture.showStill(); picture.original = "Static subtitles"; picture.showStill()
+      let idle = picture.diagnostics["mediaCreated"] as? Bool == false && picture.diagnostics["frames"] as? Int64 == 0
+      let unchanged = category == AVAudioSession.sharedInstance().category && mode == AVAudioSession.sharedInstance().mode
+      picture.start(); picture.stop(); picture.showStill()
+      let stopped = picture.diagnostics["mediaCreated"] as? Bool == false
+      finish(idle && unchanged && stopped, "idle_labels_do_not_register_media_and_stop_releases_source")
+    }
     if ProcessInfo.processInfo.arguments.contains("--verify-transport") { verifyTransport() }
     if ProcessInfo.processInfo.arguments.contains("--verify-cloud") {
       cloudFixture.run { [weak self] ok, result in self?.finish(ok, result) }
@@ -39,9 +50,9 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
       if event == "ready" { self.connect() }
       if event == "listener_failed" { self.finish(false, "listener_failed") }
     }
-    receiver.onAudio = { [weak self] buffer in
+    receiver.onAudio = { [weak self] data in
       guard let self else { return }
-      let valid = buffer.frameLength == 2 && buffer.int16ChannelData?[0][0] == 256 && buffer.int16ChannelData?[0][1] == 770
+      let valid = data == Data([0, 1, 2, 3])
       self.finish(valid, valid ? "loopback_pcm_passed" : "pcm_mismatch")
     }
     do { try receiver.start() } catch { finish(false, "start_failed") }

@@ -1,15 +1,13 @@
 import Foundation
 import Network
-import AVFoundation
 
 final class AudioReceiver {
   private let queue = DispatchQueue(label: "mimi.receiver")
   private var listener: NWListener?
   private var peer: NWConnection?
   private var decoder = AudioPacketDecoder(key: MimiWire.key)
-  var onAudio: ((AVAudioPCMBuffer) -> Void)?
+  var onAudio: ((Data) -> Void)?
   var onEvent: ((String, Error?, [String: Double]) -> Void)?
-  private let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true)!
   private var authenticated = false
   private var lastStatistics = Date.distantPast
   func start() throws {
@@ -30,6 +28,7 @@ final class AudioReceiver {
         guard let self, let listener, self.listener === listener else { c.cancel(); return }
         guard self.peer == nil else { c.cancel(); return }
         self.peer = c; self.decoder = AudioPacketDecoder(key: MimiWire.key); self.authenticated = false; self.lastStatistics = .distantPast
+        self.onEvent?("connecting", nil, [:])
         c.start(queue: self.queue); self.read(c)
         self.queue.asyncAfter(deadline: .now() + 4) { [weak self, weak c] in
           guard let self, let c, self.peer === c, !self.authenticated else { return }
@@ -51,8 +50,7 @@ final class AudioReceiver {
           if Date().timeIntervalSince(self.lastStatistics) >= 5 {
             self.lastStatistics = Date(); self.onEvent?("extension_counters", nil, ["dropped": packet.dropped, "conversionFailures": packet.conversionFailures])
           }
-          guard let raw = packet.audio, let buffer = AVAudioPCMBuffer(pcmFormat: self.format, frameCapacity: AVAudioFrameCount(raw.count / 2)), let dest = buffer.int16ChannelData?[0] else { continue }
-          buffer.frameLength = buffer.frameCapacity; raw.copyBytes(to: UnsafeMutableRawBufferPointer(start: dest, count: raw.count)); self.onAudio?(buffer)
+          if let raw = packet.audio { self.onAudio?(raw) }
         }
       } catch { let authenticated = self.authenticated; self.onEvent?("invalid_packet", nil, [:]); self.close(c); if authenticated { self.onEvent?("failed", nil, [:]) }; return }
       if complete || error != nil { let authenticated = self.authenticated; self.close(c); if authenticated { self.onEvent?(error == nil ? "ended" : "failed", error, [:]) } }

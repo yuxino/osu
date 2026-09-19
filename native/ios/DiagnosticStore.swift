@@ -60,9 +60,9 @@ final class DiagnosticStore {
     try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: url.path)
     #endif
   }
-  func snapshot(running: Bool, pip: Bool, metrics: [String: Double]) {
+  func snapshot(running: Bool, pip: Bool, metrics: [String: Double], captureState: String = "idle") {
     queue.sync {
-      let object: [String: Any] = ["schema": 2, "timestamp": ISO8601DateFormatter().string(from: Date()), "sessionID": sessionID, "running": running, "pip": pip, "storageFailed": storageFailed, "metrics": metrics.filter { numericKeys.contains($0.key) && $0.value.isFinite }]
+      let object: [String: Any] = ["schema": 3, "timestamp": ISO8601DateFormatter().string(from: Date()), "sessionID": sessionID, "running": running, "pip": pip, "captureState": token(captureState), "storageFailed": storageFailed, "metrics": metrics.filter { numericKeys.contains($0.key) && $0.value.isFinite }]
       do {
         let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
         let url = directory.deletingLastPathComponent().appendingPathComponent("probe-status.json")

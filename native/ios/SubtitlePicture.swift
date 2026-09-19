@@ -8,7 +8,7 @@ final class SubtitlePreviewView: UIView {
 
 final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDelegate, AVPictureInPictureControllerDelegate {
   let preview = SubtitlePreviewView()
-  let layer = AVSampleBufferDisplayLayer()
+  private var layer: AVSampleBufferDisplayLayer?
   private let still = UIView()
   private let stillOriginal = UILabel(), stillTranslated = UILabel()
   private var pip: AVPictureInPictureController?
@@ -22,7 +22,10 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
     preview.accessibilityLabel = "字幕"; preview.accessibilityValue = original + "\n" + translated
     updateStillText()
   }
-  func showStill() { if timer == nil { still.isHidden = false }; render() }
+  func showStill() {
+    updateStillText()
+    if timer == nil { still.isHidden = false } else { render() }
+  }
   var onEvent: ((String, Error?) -> Void)?
   var onStatus: ((String) -> Void)?
   var onClosed: (() -> Void)?
@@ -35,13 +38,17 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
     preview.layer.cornerRadius = 20
     preview.clipsToBounds = true
     preview.onLayout = { [weak self] in self?.layout() }
-    layer.videoGravity = .resizeAspect
-    preview.layer.addSublayer(layer)
     // A native still remains readable when the timed video layer has no live frames.
     still.backgroundColor = .black; still.isUserInteractionEnabled = false; preview.addSubview(still)
     for label in [stillOriginal, stillTranslated] { label.numberOfLines = 0; label.lineBreakMode = .byWordWrapping; label.adjustsFontForContentSizeCategory = true; still.addSubview(label) }
     stillOriginal.font = UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: 15)); stillOriginal.textColor = UIColor(white: 0.68, alpha: 1)
     stillTranslated.font = UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: 22, weight: .semibold)); stillTranslated.textColor = .white
+  }
+  // Opening Osu only displays labels. Register a media source after broadcast authorization.
+  private func prepareMedia() {
+    guard layer == nil else { return }
+    let layer = AVSampleBufferDisplayLayer(); self.layer = layer
+    layer.videoGravity = .resizeAspect; preview.layer.insertSublayer(layer, at: 0); layer.frame = preview.bounds
     var timebase: CMTimebase?
     CMTimebaseCreateWithSourceClock(allocator: kCFAllocatorDefault, sourceClock: CMClockGetHostTimeClock(), timebaseOut: &timebase)
     if let timebase { layer.controlTimebase = timebase; CMTimebaseSetTime(timebase, time: .zero); CMTimebaseSetRate(timebase, rate: 1) }
@@ -59,7 +66,7 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   }
   deinit { timer?.invalidate() }
   func layout() {
-    layer.frame = preview.bounds; still.frame = preview.bounds
+    layer?.frame = preview.bounds; still.frame = preview.bounds
     let width = max(0, preview.bounds.width - 32), height = preview.bounds.height
     stillOriginal.frame = CGRect(x: 16, y: 16, width: width, height: height * 0.35)
     stillTranslated.frame = CGRect(x: 16, y: height * 0.45, width: width, height: height * 0.48)
@@ -88,7 +95,8 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
     }
     return ""
   }
-  func prime() {
+  private func prime() {
+    prepareMedia()
     still.isHidden = true
     guard timer == nil else { return }
     render()
@@ -96,17 +104,28 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   }
   func start() {
     wantsPicture = true
-    prime()
     guard !stopping else { return }
+    prime()
     guard let pip else { onStatus?("此设备不支持画中画"); return }
     guard pip.isPictureInPicturePossible else { onStatus?("正在准备字幕小窗，就绪后会自动打开"); return }
     pip.startPictureInPicture()
   }
-  func stop() { wantsPicture = false; timer?.invalidate(); timer = nil; stopping = stopping || active; pip?.stopPictureInPicture(); layer.flushAndRemoveImage(); still.isHidden = false }
+  func stop() {
+    wantsPicture = false; timer?.invalidate(); timer = nil
+    if let timebase = layer?.controlTimebase { CMTimebaseSetRate(timebase, rate: 0) }
+    layer?.flushAndRemoveImage(); still.isHidden = false
+    if active { stopping = true; pip?.stopPictureInPicture() } else { releaseMedia() }
+  }
+  private func releaseMedia() {
+    readiness?.invalidate(); readiness = nil
+    pip?.delegate = nil; pip = nil
+    layer?.removeFromSuperlayer(); layer = nil; stopping = false
+  }
   var active: Bool { pip?.isPictureInPictureActive == true }
-  var diagnostics: [String: Any] { ["possible": pip?.isPictureInPicturePossible == true, "supported": AVPictureInPictureController.isPictureInPictureSupported(), "frames": frame, "layerStatus": layer.status.rawValue, "layerError": layer.error?.localizedDescription ?? ""] }
+  var diagnostics: [String: Any] { ["possible": pip?.isPictureInPicturePossible == true, "supported": AVPictureInPictureController.isPictureInPictureSupported(), "frames": frame, "mediaCreated": layer != nil, "layerStatus": layer?.status.rawValue ?? 0, "layerError": layer?.error?.localizedDescription ?? ""] }
 
   private func render() {
+    guard let layer else { return }
     let width = 960, height = 576
     var pixel: CVPixelBuffer?
     let attrs: [CFString: Any] = [kCVPixelBufferCGImageCompatibilityKey: true, kCVPixelBufferCGBitmapContextCompatibilityKey: true, kCVPixelBufferIOSurfacePropertiesKey: [:]]
@@ -144,14 +163,17 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   }
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, setPlaying playing: Bool) {}
   func pictureInPictureControllerTimeRangeForPlayback(_ pictureInPictureController: AVPictureInPictureController) -> CMTimeRange { CMTimeRange(start: .negativeInfinity, duration: .positiveInfinity) }
-  func pictureInPictureControllerIsPlaybackPaused(_ pictureInPictureController: AVPictureInPictureController) -> Bool { false }
+  func pictureInPictureControllerIsPlaybackPaused(_ pictureInPictureController: AVPictureInPictureController) -> Bool { timer == nil }
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, didTransitionToRenderSize newRenderSize: CMVideoDimensions) {}
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, skipByInterval skipInterval: CMTime, completion: @escaping () -> Void) { completion() }
   func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) { wantsPicture = false; onEvent?("started", nil); onStatus?("字幕小窗已开启") }
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) { onEvent?("failed", error); onStatus?("小窗启动失败，错误代码已写入诊断。") }
   func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+    guard pip === pictureInPictureController else { return }
     let programmatic = stopping; stopping = false; onEvent?("stopped", nil)
-    if wantsPicture { start() } else if !programmatic { onClosed?() }
+    let restart = wantsPicture
+    timer?.invalidate(); timer = nil; releaseMedia(); still.isHidden = false
+    if restart { start() } else if !programmatic { onClosed?() }
   }
-  func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) { completionHandler(true) }
+  func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) { completionHandler(false) }
 }

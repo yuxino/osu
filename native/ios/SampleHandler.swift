@@ -9,6 +9,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
   private var sourceFormat: AVAudioFormat?
   private var ready = false
   private var pending = false
+  private var backlog = PCMBacklog()
+  private var events: [String] = []
+  private var pump: DispatchSourceTimer?
+  private var lastHeartbeat = Date.distantPast
+  private var heartbeatDue = false
   private var stopped = false
   private var dropped = 0
   private var conversionFailures = 0
@@ -29,7 +34,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
         case .ready:
           self.ready = true
           self.log.record("transport", "connected")
-          self.send(["event": "started", "key": MimiWire.key])
+          self.sendEvent("started")
+          self.startPump()
           self.watchHost(c)
         case .failed(let error): self.log.record("transport", "failed", error: error); self.end("字幕接收器不可用：\(error.localizedDescription)")
         default: break
@@ -38,7 +44,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
       c.start(queue: self.queue)
       self.queue.asyncAfter(deadline: .now() + 8) { [weak self] in
         guard let self, !self.ready, !self.stopped else { return }
-        self.log.record("transport", "host_timeout"); self.end("请先在 osu 中开启字幕小窗，再开始广播。")
+        self.log.record("transport", "host_timeout"); self.end("请先在 Osu 中点「开始听」，再允许收音。")
       }
     }
   }
@@ -51,16 +57,26 @@ final class SampleHandler: RPBroadcastSampleHandler {
     }
   }
 
-  override func broadcastPaused() { queue.async { self.log.record("broadcast", "paused"); self.send(["key": MimiWire.key, "event": "paused"]) } }
-  override func broadcastResumed() { queue.async { self.log.record("broadcast", "resumed"); self.send(["key": MimiWire.key, "event": "resumed"]) } }
-  override func broadcastFinished() { queue.async { self.log.record("broadcast", "finished"); self.stopped = true; self.ready = false; self.connection?.cancel(); self.connection = nil } }
+  override func broadcastPaused() { queue.async { self.log.record("broadcast", "paused"); self.sendEvent("paused") } }
+  override func broadcastResumed() { queue.async { self.log.record("broadcast", "resumed"); self.sendEvent("resumed") } }
+  override func broadcastFinished() { queue.async { self.log.record("broadcast", "finished"); self.stopped = true; self.ready = false; self.pump?.cancel(); self.pump = nil; self.backlog.clear(); self.connection?.cancel(); self.connection = nil } }
+
+  private func startPump() {
+    let timer = DispatchSource.makeTimerSource(queue: queue); pump = timer
+    timer.schedule(deadline: .now(), repeating: .milliseconds(100))
+    timer.setEventHandler { [weak self] in
+      guard let self, !self.stopped else { return }
+      if Date().timeIntervalSince(self.lastHeartbeat) >= 1 { self.lastHeartbeat = Date(); self.heartbeatDue = true }
+      self.drain(flush: true)
+    }
+    timer.resume()
+  }
 
   override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
     guard sampleBufferType == .audioApp else { return }
-    // ReplayKit calls serially, but never queue retained audio behind network work.
+    // Convert promptly, then retain only a bounded amount of compact PCM.
     queue.sync {
       guard ready, !stopped else { return }
-      guard !pending else { dropped += 1; return }
       guard let description = CMSampleBufferGetFormatDescription(sampleBuffer) else { return }
       let format = AVAudioFormat(cmAudioFormatDescription: description)
       guard let pcm = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(CMSampleBufferGetNumSamples(sampleBuffer))) else { return }
@@ -76,26 +92,39 @@ final class SampleHandler: RPBroadcastSampleHandler {
       }
       guard error == nil, output.frameLength > 0, let samples = output.int16ChannelData?[0] else {
         conversionFailures += 1
-        if conversionFailures == 1 { log.record("audio", "conversion_failed", error: error); send(["key": MimiWire.key, "event": "conversion_failed"]) }; return
+        if conversionFailures == 1 { log.record("audio", "conversion_failed", error: error); sendEvent("conversion_failed") }; return
       }
       let data = Data(bytes: samples, count: Int(output.frameLength) * 2)
-      guard data.count <= 32768 else { return }
+      do { try backlog.append(data) }
+      catch { log.record("audio", "buffer_overflow"); end("音频处理跟不上播放速度，已停止收音。请回到 Osu 重新开始。"); return }
       frames += 1
       if Date().timeIntervalSince(lastLog) >= 5 { lastLog = Date(); log.record("audio", "counters", metrics: ["audioFrames": Double(frames), "dropped": Double(dropped), "conversionFailures": Double(conversionFailures)]) }
-      send(["key": MimiWire.key, "audio": data.base64EncodedString(), "dropped": dropped, "conversionFailures": conversionFailures])
+      drain()
     }
   }
 
-  private func send(_ object: [String: Any]) {
-    guard !pending, ready, let data = try? JSONSerialization.data(withJSONObject: object) else { return }
+  private func sendEvent(_ event: String) {
+    guard !stopped else { return }
+    guard events.count < 16 else { end("收音状态传输中断，请重新开始。"); return }
+    events.append(event); drain()
+  }
+  private func drain(flush: Bool = false) {
+    guard !pending, ready, !stopped, let connection else { return }
+    var object: [String: Any] = ["key": MimiWire.key, "dropped": dropped, "conversionFailures": conversionFailures]
+    if !events.isEmpty { object["event"] = events.removeFirst() }
+    else if heartbeatDue { object["event"] = "heartbeat"; heartbeatDue = false }
+    else if backlog.count >= 3200 || (flush && backlog.count > 0), let audio = backlog.take() { object["audio"] = audio.base64EncodedString() }
+    else { return }
+    guard let data = try? JSONSerialization.data(withJSONObject: object) else { end("收音数据处理失败，请重新开始。"); return }
     pending = true
-    connection?.send(content: data + Data([10]), completion: .contentProcessed { [weak self] error in
-      guard let self else { return }; self.pending = false
+    connection.send(content: data + Data([10]), completion: .contentProcessed { [weak self, weak connection] error in
+      guard let self, let connection, self.connection === connection, !self.stopped else { return }; self.pending = false
       if let error { self.log.record("transport", "send_failed", error: error); self.end("音频传输中断：\(error.localizedDescription)") }
+      else { self.drain() }
     })
   }
   private func end(_ message: String) {
-    guard !stopped else { return }; log.record("broadcast", "ended"); stopped = true; ready = false; connection?.cancel()
+    guard !stopped else { return }; log.record("broadcast", "ended"); stopped = true; ready = false; pump?.cancel(); pump = nil; backlog.clear(); connection?.cancel()
     finishBroadcastWithError(NSError(domain: "MimiPrototype", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
   }
 }

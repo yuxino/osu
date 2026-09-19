@@ -22,7 +22,7 @@ files = Dir[File.join(native, '*.{swift,m}')]
 files.each do |file|
  name = File.basename(file)
  ref = group.files.find { |f| f.path == name } || group.new_file(name)
- targets = name == 'SampleHandler.swift' ? [extension] : ['MimiWire.swift', 'DiagnosticStore.swift'].include?(name) ? [host, extension] : [host]
+ targets = name == 'SampleHandler.swift' ? [extension] : ['MimiWire.swift', 'DiagnosticStore.swift', 'PCMBacklog.swift'].include?(name) ? [host, extension] : [host]
  targets.each { |t| t.source_build_phase.add_file_reference(ref) unless t.source_build_phase.files_references.include?(ref) }
 end
 team = host.build_configurations.map { |c| c.build_settings['DEVELOPMENT_TEAM'] }.compact.first

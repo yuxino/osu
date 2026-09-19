@@ -36,14 +36,15 @@ import Foundation
 // This file is only linked into the separate simulator harness, never the app.
 @MainActor final class CloudUIFixture {
   private var sockets: [FixtureRealtimeSocket] = []
-  func controller() -> MimiPrototypeController {
+  func controller(ready: Bool = false) -> MimiPrototypeController {
+    UserDefaults.standard.set(true, forKey: "osu.automaticLanguageDefaultsV1")
     UserDefaults.standard.set("alibaba", forKey: "mimi.engine")
-    UserDefaults.standard.set("ja", forKey: "mimi.alibaba.source")
+    UserDefaults.standard.set(ready ? "auto" : "ja", forKey: "mimi.alibaba.source")
     UserDefaults.standard.set("zh", forKey: "mimi.alibaba.target")
     return MimiPrototypeController(makeCloudClient: { [self] in
       let socket = FixtureRealtimeSocket()
       // First connection never becomes ready; later ones never confirm finish.
-      socket.acknowledgeSetup = !sockets.isEmpty; socket.acknowledgeFinish = false
+      socket.acknowledgeSetup = ready || !sockets.isEmpty; socket.acknowledgeFinish = ready
       sockets.append(socket)
       socket.onClose = { [weak self] in self?.writeState() }
       writeState()
