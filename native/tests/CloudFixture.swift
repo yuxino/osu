@@ -63,12 +63,15 @@ import Network
 // This file is only linked into the separate simulator harness, never the app.
 @MainActor final class CloudUIFixture {
   private(set) var sockets: [FixtureRealtimeSocket] = []
-  func controller(ready: Bool = false) -> MimiPrototypeController {
+  private(set) var pickerRequests = 0
+  private var key: String? = "fixture-only"
+  func controller(ready: Bool = false, systemPicker: Bool = false) -> MimiPrototypeController {
     UserDefaults.standard.set(true, forKey: "osu.automaticLanguageDefaultsV1")
     UserDefaults.standard.set("alibaba", forKey: "mimi.engine")
     UserDefaults.standard.set(ready ? "auto" : "ja", forKey: "mimi.alibaba.source")
     UserDefaults.standard.set("zh", forKey: "mimi.alibaba.target")
     writeState()
+    let picker: (() -> Bool)? = systemPicker ? nil : { [self] in pickerRequests += 1; return true }
     return MimiPrototypeController(makeCloudClient: { [self] in
       let socket = FixtureRealtimeSocket()
       // First connection never becomes ready; later ones never confirm finish.
@@ -77,7 +80,7 @@ import Network
       socket.onClose = { [weak self] in self?.writeState() }
       writeState()
       return AlibabaClient(factory: { _ in socket })
-    }, readCloudCredential: { "fixture-only" })
+    }, readCloudCredential: { [self] in key }, saveCloudCredential: { [self] in key = $0 }, removeCloudCredential: { [self] in key = nil }, requestBroadcast: picker)
   }
   private func writeState() {
     let rows = sockets.map { ["closed": $0.closed, "audio": $0.sentAudio, "finish": $0.sentFinish] as [String: Any] }
@@ -97,11 +100,14 @@ import Network
         try await Task.sleep(nanoseconds: 500_000_000)
         try press("开始听", in: controller.view)
         try await Task.sleep(nanoseconds: 45_000_000_000)
-        guard fixture.sockets.isEmpty, let guide = controller.presentedViewController as? CapturePermissionController else { throw failure("permission_wait_created_cloud_or_lost_guide") }
+        guard fixture.sockets.isEmpty, fixture.pickerRequests == 1, controller.presentedViewController == nil else { throw failure("permission_wait_created_cloud_or_extra_guide") }
         NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
         try await Task.sleep(nanoseconds: 300_000_000)
-        guard fixture.sockets.isEmpty, controller.presentedViewController === guide else { throw failure("resume_changed_permission_session") }
-        try press("暂不开启", in: guide.view)
+        guard fixture.sockets.isEmpty, fixture.pickerRequests == 1, controller.presentedViewController == nil else { throw failure("resume_reopened_system_picker") }
+        try press("开始听", in: controller.view)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        guard fixture.pickerRequests == 2, fixture.sockets.isEmpty else { throw failure("explicit_retry_did_not_request_picker") }
+        try press("取消", in: controller.view)
         try await Task.sleep(nanoseconds: 700_000_000)
         guard fixture.sockets.isEmpty, controller.presentedViewController == nil else { throw failure("permission_cancel_did_not_stay_local") }
         guard subtitle(in: controller.view)?.contains("字幕会出现在这里") == true else { throw failure("cancel_left_waiting_subtitle") }
@@ -123,7 +129,7 @@ import Network
         guard fixture.sockets[0].closed, fixture.sockets[0].sentFinish == 1 else { throw failure("capture_stop_did_not_close_cloud") }
         guard subtitle(in: controller.view)?.contains("你好") == true else { throw failure("stop_cleared_received_subtitle") }
         connection.cancel(); self.connection = nil
-        completion(true, "wait_45s_resume_cancel_then_authenticated_audio_resume_and_finish")
+        completion(true, "direct_picker_wait_45s_no_auto_reopen_retry_cancel_authenticated_audio_and_finish")
       } catch {
         connection?.cancel(); connection = nil
         completion(false, (error as NSError).domain)

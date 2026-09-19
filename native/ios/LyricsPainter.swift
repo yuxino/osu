@@ -5,7 +5,7 @@ enum LyricsPainter {
   static let size = CGSize(width: 960, height: 440)
   static var aspect: CGFloat { size.height / size.width }
   // Decode the existing character once at its rendered size, not on each frame.
-  private static let character: UIImage? = {
+  static let character: UIImage? = {
     guard let url = Bundle.main.url(forResource: "mimi-maid-v1", withExtension: "png"),
           let source = CGImageSourceCreateWithURL(url as CFURL, nil),
           let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [

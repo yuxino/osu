@@ -8,7 +8,7 @@ struct CaptureReadiness {
       switch self {
       case .idle: return "自动识别声音的语言，准备好了就开始。"
       case .preparing: return "正在准备收音…"
-      case .needsBroadcast: return "尚未允许收音。点下方系统按钮，选择 Osu Audio，再点「开始广播」。"
+      case .needsBroadcast: return "在系统面板中选择 Osu Audio，再点「开始广播」。关闭了面板？点「开始听」即可重试。"
       case .connecting: return "正在连接 Osu Audio…"
       case .waitingForAudio: return "广播已连接，等待声音。请切回网页或 App 播放内容。"
       case .silent: return "广播已开启，收到的音频暂时是静音。若视频正在发声，内容可能限制收音。"

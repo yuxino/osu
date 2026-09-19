@@ -19,14 +19,14 @@ Turn audio from other apps into a floating subtitle window. Inspired by [Mimi](h
 
 ## Features
 
-- **Lyrics-style captions** — cloud translations move up sentence by sentence, with the current line prominent and the previous line faded. Translations appear alone by default; enable the original text in settings.
+- **Lyrics-style captions** — cloud translations move up sentence by sentence, with the current line prominent and the previous line faded. Translations appear alone by default; toggle the original text from home or settings.
 - **Automatic language detection** — Alibaba mode detects the spoken language and translates into Chinese by default. Change either language when needed.
 - **Local or cloud** — choose Apple on-device recognition and translation, or Alibaba Cloud realtime translation. Apple translation requires iOS 26 and supported language packs; local recognition requires a manually selected source language.
 
 ## Get started
 
-1. [Build and install](CONTRIBUTING.md), then add your Alibaba Cloud Model Studio API key for the Beijing region in settings, or choose Apple local mode.
-2. Tap **开始听**, select **Osu Audio** in the system broadcast panel, and start broadcasting.
+1. [Build and install](CONTRIBUTING.md), then add your Alibaba Cloud Model Studio API key for the Beijing region when prompted, or choose Apple local mode in settings.
+2. Tap **开始听** to open the system broadcast panel directly. Select **Osu Audio** and confirm **开始广播**.
 3. Return to your video app. Close the subtitle window or tap **停止** to stop listening.
 
 Keep the video in its original app: another app's Picture in Picture window can replace Osu's subtitles and end capture. Close iPhone Mirroring before starting a broadcast. App compatibility and long background sessions are still being tested.

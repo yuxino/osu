@@ -7,6 +7,7 @@ import Network
 @MainActor final class StreamEnduranceFixture {
   private let picture = SubtitlePicture()
   private let socket = FixtureRealtimeSocket()
+  private var pickerRequests = 0
   private var connection: NWConnection?
   private var captureClosed = false
   private var checkpoints: [[String: Any]] = []
@@ -18,7 +19,7 @@ import Network
     UserDefaults.standard.set("auto", forKey: "mimi.alibaba.source")
     UserDefaults.standard.set("zh", forKey: "mimi.alibaba.target")
     socket.streamingLyrics = true; socket.acknowledgeFinish = false
-    return MimiPrototypeController(makeCloudClient: { [socket] in AlibabaClient(factory: { _ in socket }) }, readCloudCredential: { "fixture-only" }, picture: picture)
+    return MimiPrototypeController(makeCloudClient: { [socket] in AlibabaClient(factory: { _ in socket }) }, readCloudCredential: { "fixture-only" }, requestBroadcast: { [self] in pickerRequests += 1; return true }, picture: picture)
   }
 
   func run(controller: MimiPrototypeController, duration: Int, completion: @escaping (Bool, String) -> Void) {
@@ -26,7 +27,7 @@ import Network
       do {
         try await wait { UIApplication.shared.applicationState == .active }
         try press("开始听", in: controller.view)
-        try await wait { controller.presentedViewController is CapturePermissionController }
+        try await wait { self.pickerRequests == 1 }
         let stream = NWConnection(host: "127.0.0.1", port: 49371, using: .tcp); connection = stream
         stream.start(queue: DispatchQueue(label: "osu.stream.fixture"))
         try await wait { if case .ready = stream.state { return true }; return false }

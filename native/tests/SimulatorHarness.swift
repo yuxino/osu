@@ -12,6 +12,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
   private let cloudFixture = CloudFixture()
   private let lifecycle = CloudLifecycleFixture()
   private let cloudUI = CloudUIFixture()
+  private let interactions = InteractionFixture()
   private let captureStartup = CaptureStartupFixture()
   private let sessionFinish = SessionFinishFixture()
   private let endurance = StreamEnduranceFixture()
@@ -26,11 +27,19 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     let stream = arguments.contains("--verify-stream-smoke") || arguments.contains("--verify-stream-endurance")
     let motion = arguments.contains("--verify-motion") || arguments.contains("--verify-reduced-motion")
     if motion { w.rootViewController = UIViewController() }
+    else if arguments.contains("--verify-interactions") || arguments.contains("--interactions-ui") { w.rootViewController = interactions.controller() }
+    else if arguments.contains("--broadcast-ui") { w.rootViewController = cloudUI.controller(ready: true, systemPicker: true) }
     else if stream { w.rootViewController = endurance.controller() }
     else if arguments.contains("--verify-session-finish") || backgroundFinish { w.rootViewController = sessionFinish.controller(systemBackground: backgroundFinish) }
     else if arguments.contains("--lyrics-ui") { w.rootViewController = LyricsDemoController() }
     else { w.rootViewController = arguments.contains("--capture-ui") || arguments.contains("--verify-capture-start") ? cloudUI.controller(ready: true) : (arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController()) }
     w.makeKeyAndVisible(); window = w
+    if arguments.contains("--broadcast-ui") {
+      func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap { descendants($0) } }
+      let events = descendants(w.rootViewController!.view).compactMap { $0 as? RPSystemBroadcastPickerView }.flatMap { $0.subviews.compactMap { $0 as? UIButton } }.map { $0.allControlEvents.rawValue }
+      let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("broadcast-control.json")
+      if let data = try? JSONSerialization.data(withJSONObject: ["events": events, "touchUpInside": UIControl.Event.touchUpInside.rawValue]) { try? data.write(to: url, options: .atomic) }
+    }
     if motion, let view = w.rootViewController?.view { MotionFixture.run(in: view, reduced: arguments.contains("--verify-reduced-motion")) { [weak self] ok, result in self?.finish(ok, result) } }
     if arguments.contains("--verify-lyrics-layout") { let result = LyricsRenderFixture.run(); finish(result.0, result.1) }
     if arguments.contains("--export-lyrics") {
@@ -45,6 +54,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
       captureStartup.run(controller: controller, fixture: cloudUI) { [weak self] ok, result in self?.finish(ok, result) }
     }
     if let controller = w.rootViewController as? MimiPrototypeController {
+      if arguments.contains("--verify-interactions") { interactions.run(controller) { [weak self] ok, result in self?.finish(ok, result) } }
       if stream { endurance.run(controller: controller, duration: arguments.contains("--verify-stream-endurance") ? 900 : 12) { [weak self] ok, result in self?.finish(ok, result) } }
       if arguments.contains("--verify-session-finish") { sessionFinish.run(controller: controller) { [weak self] ok, result in self?.finish(ok, result) } }
       if backgroundFinish { sessionFinish.runInBackground(controller: controller, acknowledge: arguments.contains("--verify-background-finish")) { [weak self] ok, result in self?.finish(ok, result) } }

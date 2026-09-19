@@ -8,6 +8,7 @@ import Network
   private let picture = SubtitlePicture()
   private let tasks = FixtureBackgroundTasks()
   private var sockets: [FixtureRealtimeSocket] = []
+  private var pickerRequests = 0
   private var connection: NWConnection?
   private var observer: NSObjectProtocol?
   private var captureClosed = false
@@ -22,7 +23,7 @@ import Network
     return MimiPrototypeController(makeCloudClient: { [self] in
       let socket = FixtureRealtimeSocket(); socket.acknowledgeFinish = false; sockets.append(socket)
       return AlibabaClient(factory: { _ in socket })
-    }, readCloudCredential: { "fixture-only" }, picture: picture, backgroundTasks: tasks.provider)
+    }, readCloudCredential: { "fixture-only" }, requestBroadcast: { [self] in pickerRequests += 1; return true }, picture: picture, backgroundTasks: tasks.provider)
   }
 
   func run(controller: MimiPrototypeController, completion: @escaping (Bool, String) -> Void) {
@@ -105,8 +106,9 @@ import Network
   private func start(_ controller: MimiPrototypeController) async throws {
     try await wait { UIApplication.shared.applicationState == .active && self.button("开始听", in: controller.view) != nil }
     let count = sockets.count
+    let requests = pickerRequests
     try press("开始听", in: controller.view)
-    try await wait { controller.presentedViewController is CapturePermissionController }
+    try await wait { self.pickerRequests == requests + 1 }
     captureClosed = false
     let stream = NWConnection(host: "127.0.0.1", port: 49371, using: .tcp); connection = stream
     stream.start(queue: DispatchQueue(label: "osu.finish.fixture"))

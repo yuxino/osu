@@ -12,6 +12,7 @@ sources << File.join(root, 'native/tests/SessionFinishFixture.swift')
 sources << File.join(root, 'native/tests/LyricsRenderFixture.swift')
 sources << File.join(root, 'native/tests/StreamEnduranceFixture.swift')
 sources << File.join(root, 'native/tests/MotionFixture.swift')
+sources << File.join(root, 'native/tests/InteractionFixture.swift')
 sources.each { |f| t.source_build_phase.add_file_reference(g.new_file(f)) }
 t.resources_build_phase.add_file_reference(g.new_file(File.join(root, 'assets/brand/mimi-maid-v1.png')))
 t.build_configurations.each do |c|

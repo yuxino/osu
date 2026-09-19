@@ -21,10 +21,14 @@ enum CloudCredentialStore {
     guard status == errSecSuccess, let data = result as? Data, let value = String(data: data, encoding: .utf8) else { throw Failure.unavailable }
     return value
   }
+  static func isValid(_ raw: String) -> Bool {
+    let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    return (8...512).contains(value.utf8.count) && value.unicodeScalars.allSatisfy { $0.value >= 33 && $0.value <= 126 }
+  }
   static func save(_ raw: String, service: String = "com.yuxino.osu.alibaba") throws {
     let query = query(service)
     let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard (8...512).contains(value.utf8.count), value.unicodeScalars.allSatisfy({ $0.value >= 33 && $0.value <= 126 }) else { throw Failure.invalid }
+    guard isValid(value) else { throw Failure.invalid }
     let updates: [String: Any] = [kSecValueData as String: Data(value.utf8), kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
     let status = SecItemUpdate(query as CFDictionary, updates as CFDictionary)
     if status == errSecItemNotFound {
