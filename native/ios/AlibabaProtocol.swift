@@ -21,6 +21,7 @@ enum AlibabaProtocol {
     if source != "auto" { transcription["language"] = source }
     return try json(["event_id": UUID().uuidString, "type": "session.update", "session": ["modalities": ["text"], "sample_rate": 16000, "input_audio_format": "pcm", "input_audio_transcription": transcription, "translation": ["language": target]]])
   }
+  static func finish() throws -> String { try json(["event_id": UUID().uuidString, "type": "session.finish"]) }
   static func audio(_ data: Data) throws -> String {
     guard !data.isEmpty, data.count <= 32768, data.count % 2 == 0 else { throw Failure.oversized }
     return try json(["event_id": UUID().uuidString, "type": "input_audio_buffer.append", "audio": data.base64EncodedString()])

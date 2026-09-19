@@ -4,11 +4,15 @@
     "slug": "osu",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/brand/mimi-app-icon-v1.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yuxino.osu"
+      "bundleIdentifier": "com.yuxino.osu",
+      "buildNumber": "2",
+      "infoPlist": {
+        "CFBundleDisplayName": "Mimi"
+      }
     },
     "android": {
       "adaptiveIcon": {

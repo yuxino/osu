@@ -1,6 +1,8 @@
 import UIKit
 import Network
 import AVFoundation
+import ReplayKit
+import AVKit
 
 @main
 final class SimulatorHarness: UIResponder, UIApplicationDelegate {
@@ -8,6 +10,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
   private let receiver = AudioReceiver()
   private var client: NWConnection?
   private let cloudFixture = CloudFixture()
+  private let lifecycle = CloudLifecycleFixture()
   private let sample = CloudSampleTest()
   private var completed = false
   private let queue = DispatchQueue(label: "mimi.simulator.tests")
@@ -18,6 +21,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
       cloudFixture.run { [weak self] ok, result in self?.finish(ok, result) }
       DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in self?.finish(false, "cloud_fixture_timeout") }
     }
+    if ProcessInfo.processInfo.arguments.contains("--verify-lifecycle") { lifecycle.run { [weak self] ok, result in self?.finish(ok, result) } }
     if ProcessInfo.processInfo.arguments.contains("--verify-sample") {
       sample.prepare { [weak self] data in
         let valid = data.map { $0.count > 32000 && $0.count <= 640000 && $0.count % 2 == 0 && $0.contains(where: { $0 != 0 }) } ?? false
@@ -55,7 +59,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
       guard !completed else { return }; completed = true
       receiver.stop(); client?.cancel()
       let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("simulator-test.json")
-      let data = try! JSONSerialization.data(withJSONObject: ["passed": passed, "result": result, "timestamp": ISO8601DateFormatter().string(from: Date()), "scope": "Production receiver/client, fixture input only; no live Alibaba, ReplayKit or Apple model acceptance"])
+      let data = try! JSONSerialization.data(withJSONObject: ["screenRecorderAvailable": RPScreenRecorder.shared().isAvailable, "pictureInPictureSupported": AVPictureInPictureController.isPictureInPictureSupported(), "passed": passed, "result": result, "timestamp": ISO8601DateFormatter().string(from: Date()), "scope": "Production receiver/client, fixture input only; no live Alibaba, ReplayKit or Apple model acceptance"])
       try! data.write(to: url, options: .atomic)
     }
   }

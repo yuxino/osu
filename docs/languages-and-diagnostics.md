@@ -1,6 +1,8 @@
 # 语言、诊断与验证
 
-## 当前实现
+## Apple 本地模式
+
+阿里云模式、实际云端测试和收尾语义见 [阿里云指南](alibaba.md)。设置中可复制、导出诊断。
 
 - 声音语言来自 `SFSpeechRecognizer.supportedLocales()`，保留地区差异；只有系统报告支持本地识别的项可选。开始时再次检查本地能力和当前可用性，所有请求都强制本地处理。
 - “本地能力存在”不等于资源永远可用。运行时错误会记录，界面会说明。当前使用的 Speech 接口没有应用内语言包下载入口；不会假称已下载，也不会转为云端识别。
@@ -41,7 +43,7 @@ UI 上的复制与导出包含主 App 最近保留的记录，并非所有历史
 python3 scripts/collect-diagnostics.py --device YOUR_COREDEVICE_ID
 ```
 
-脚本只尝试复制主 App 日志、快照和扩展日志到 `ios/diagnostic-exports/<UTC 时间>/`，
+脚本只尝试复制主 App 日志、快照和扩展日志到 `.build/diagnostic-exports/<UTC 时间>/`，
 不启动或停止 App，不删除手机日志，不读取音频或其他 App。
 需要手机连接/信任、系统允许的开发访问；必要时解锁。
 扩展容器是否能直接访问由系统决定，失败会明确标为 unavailable，不能把缺少扩展日志解释为未运行过广播。
@@ -67,7 +69,9 @@ scripts/test-simulator.sh YOUR_SIMULATOR_UDID
 检查帧数和样本值；产出新的 `Documents/simulator-test.json`。旧结果会先归档，避免误报。
 Harness 不请求麦克风、不注入真实 Speech/Translation 结果，不包含在主 App。
 
-## 2026-09-19 验证记录
+## 2026-09-19 早期语言版本验证记录
+
+以下为 52b02db 时的记录；后续日常界面与云端验收见 [新版验收记录](acceptance/2026-09-19.md)。
 
 - TypeScript 检查、本地 Swift 回归检查通过。
 - iPhone Release 主 App 与广播扩展编译通过（无签名检查，不连接手机）。

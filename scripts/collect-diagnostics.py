@@ -10,7 +10,7 @@ import subprocess
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device', required=True, help='CoreDevice ID or device name; requires system trust/authorization')
-    parser.add_argument('--output', type=Path, default=Path('ios/diagnostic-exports'))
+    parser.add_argument('--output', type=Path, default=Path('.build/diagnostic-exports'))
     args = parser.parse_args()
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     output = args.output / stamp

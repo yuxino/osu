@@ -46,6 +46,9 @@ import Foundation
   private var ready = false, active = false, sending = false
   private var queue = BoundedAudioQueue()
   private var setupAt = Date(), sendAt: Date?, pingAt: Date?, lastPing = Date()
+  private var finishRequested = false, finishSent = false
+  private var finishAt: Date?
+  private var finishCompletion: ((Bool) -> Void)?
   private var sourceGate = CloudPreviewGate(), translationGate = CloudPreviewGate()
   init(factory: ((String) -> RealtimeSocket)? = nil) { self.factory = factory ?? { DashScopeSocket(key: $0) } }
   func start(key: String, source: String, target: String) throws {
@@ -66,7 +69,7 @@ import Foundation
           case .source(let text, let id, let final): if self.ready && self.sourceGate.accept(id: id, final: final) && !text.isEmpty { self.onSource?(text, final) }
           case .translation(let text, let id, let final): if self.ready && self.translationGate.accept(id: id, final: final) && !text.isEmpty { self.onTranslation?(text, final) }
           case .failure(let failure): self.fail(failure); return
-          case .finished: self.fail(.transport); return
+          case .finished: if self.finishRequested { self.completeFinish(true) } else { self.fail(.transport) }; return
           case .ignored: break
           }
         }
@@ -77,6 +80,7 @@ import Foundation
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         guard let self, self.active, self.generation == epoch, !Task.isCancelled else { return }
         let now = Date()
+        if self.finishAt.map({ now.timeIntervalSince($0) >= 8 }) == true { self.completeFinish(false); return }
         if (!self.ready && now.timeIntervalSince(self.setupAt) > 15) || self.sendAt.map({ now.timeIntervalSince($0) > 5 }) == true || self.pingAt.map({ now.timeIntervalSince($0) > 5 }) == true { self.fail(.timeout); return }
         if self.ready && self.pingAt == nil && now.timeIntervalSince(self.lastPing) >= 10 {
           self.pingAt = now; self.lastPing = now
@@ -89,8 +93,16 @@ import Foundation
     }
   }
   func append(_ data: Data) {
-    guard active else { return }
+    guard active && !finishRequested else { return }
     do { try queue.append(data); flush() } catch { fail(.overload) }
+  }
+  // Capture stops at the caller. Only already queued audio may drain before finish.
+  func finish(completion: @escaping (Bool) -> Void) {
+    guard active && ready && !finishRequested else { completion(false); return }
+    finishRequested = true; finishAt = Date(); finishCompletion = completion; flush()
+  }
+  private func completeFinish(_ confirmed: Bool) {
+    let completion = finishCompletion; stop(); completion?(confirmed)
   }
   private func flush() {
     guard ready && active && !sending, let socket else { return }
@@ -104,13 +116,21 @@ import Foundation
         guard self.generation == epoch && self.active else { return }
         self.sendAt = nil; self.onMetric?(data.count)
       }
+      if self.active && self.generation == epoch && self.finishRequested && !self.finishSent {
+        self.finishSent = true; self.sendAt = Date()
+        do { try await socket.send(AlibabaProtocol.finish()) }
+        catch { if self.generation == epoch && self.active { self.fail(.transport) }; return }
+        guard self.generation == epoch && self.active else { return }
+        self.sendAt = nil
+      }
       if self.generation == epoch { self.sending = false }
     }
   }
   func stop() {
+    finishRequested = false; finishSent = false; finishAt = nil; finishCompletion = nil
     generation += 1; active = false; ready = false; sending = false
     receiveWork?.cancel(); sendWork?.cancel(); healthWork?.cancel(); receiveWork = nil; sendWork = nil; healthWork = nil
     socket?.close(); socket = nil; queue.clear(); sendAt = nil; pingAt = nil
   }
-  private func fail(_ failure: AlibabaProtocol.Failure) { guard active else { return }; stop(); onFailure?(failure) }
+  private func fail(_ failure: AlibabaProtocol.Failure) { guard active else { return }; if finishRequested { completeFinish(false) } else { stop(); onFailure?(failure) } }
 }

@@ -18,7 +18,8 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "ios:device": "expo run:ios --device --configuration Release",
-    "ios:configure": "bundle exec ruby scripts/configure-ios-prototype.rb"
+    "ios:configure": "bundle exec ruby scripts/configure-ios-prototype.rb",
+    "ios:prebuild": "expo prebuild --platform ios --no-install --no-clean"
   },
   "private": true,
   "engines": {

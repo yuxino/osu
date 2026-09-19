@@ -1,28 +1,27 @@
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NativeModules, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 export default function App() {
   const available = Platform.OS === 'ios' && typeof NativeModules.MimiPrototype?.open === 'function';
+  useEffect(() => {
+    if (available) NativeModules.MimiPrototype.open();
+  }, [available]);
   return (
     <View style={styles.container}>
-      <Text style={styles.eyebrow}>OSU · EXPERIMENT 01</Text>
-      <Text style={styles.title}>{'Mimi，\n来到手机上。'}</Text>
-      <Text style={styles.description}>让其他 App 的声音，变成你选择的语言字幕。</Text>
-      <Pressable disabled={!available} accessibilityRole="button" onPress={() => NativeModules.MimiPrototype.open()} style={({ pressed }) => [styles.button, pressed && styles.pressed, !available && styles.disabled]}>
-        <Text style={styles.buttonText}>{available ? '打开真机实验' : '需要包含原生模块的 iPhone 安装包'}</Text>
+      <Text style={styles.title}>Mimi</Text>
+      <Text style={styles.description}>听懂此刻。</Text>
+      <Pressable disabled={!available} accessibilityRole="button" onPress={() => NativeModules.MimiPrototype.open()} style={styles.button}>
+        <Text style={styles.buttonText}>{available ? '打开字幕' : '请使用 iPhone 版本'}</Text>
       </Pressable>
-      <Text style={styles.note}>Apple 本地 / 阿里云同传{ '\n' }云端模式需自备密钥并上传音频；暂不保证所有 App 兼容。</Text>
-      <StatusBar style="dark" />
+      <StatusBar style="auto" />
     </View>
   );
 }
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 30, justifyContent: 'center' },
-  eyebrow: { color: '#777', fontSize: 11, letterSpacing: 2, marginBottom: 24 },
-  title: { fontSize: 40, lineHeight: 54, fontWeight: '700', color: '#171717' },
-  description: { fontSize: 17, lineHeight: 28, color: '#666', marginTop: 20, marginBottom: 40 },
+  title: { fontSize: 42, fontWeight: '600', color: '#171717' },
+  description: { fontSize: 20, lineHeight: 30, color: '#666', marginTop: 16, marginBottom: 36 },
   button: { backgroundColor: '#171717', borderRadius: 14, padding: 18, alignItems: 'center' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  note: { color: '#888', fontSize: 12, lineHeight: 21, marginTop: 22 },
-  pressed: { opacity: 0.7 }, disabled: { opacity: 0.45 },
 });

@@ -13,7 +13,7 @@ class MimiPrototype: NSObject {
       guard !(top is MimiPrototypeController) else { return }
       let controller = MimiPrototypeController()
       controller.modalPresentationStyle = .fullScreen
-      top.present(controller, animated: true)
+      top.present(controller, animated: false)
     }
   }
 }
