@@ -1,16 +1,16 @@
 # Mimi iPhone feasibility prototype
 
-Scope: user-initiated ReplayKit app-audio capture, local English speech recognition,
-English-to-Chinese translation, and a sample-buffer Picture in Picture subtitle view.
+Scope: user-initiated ReplayKit app-audio capture, device-supported local speech recognition,
+user-selected local translation, and a sample-buffer Picture in Picture subtitle view.
 This is a device experiment, not a claim of universal app compatibility or App Store readiness.
 
 - React Native remains the launcher. The experiment is an explicit native screen.
 - A Broadcast Upload Extension drops video and microphone samples immediately.
 - The extension converts app audio to 16 kHz mono PCM and sends bounded frames over
   an authenticated loopback-only connection. No App Group or remote service is used.
-- The host requires on-device Speech support and never falls back to cloud recognition.
+- The host enumerates Speech locales at runtime and requires on-device Speech support and never falls back to cloud recognition.
 - Translation uses Apple's downloaded language packs. Downloads require system consent.
-- Audio and transcripts are not written to disk. Diagnostic counters contain no transcript.
+- Audio and transcripts are not written to disk. The bounded diagnostic journal and timestamped counter snapshot contain no transcript. See [language and diagnostics guide](languages-and-diagnostics.md).
 - Stop closes the receiver and the extension ends when its host connection closes.
 - Background lifetime, speech-session duration, other-app compatibility and PiP content
   behavior must be assessed on a physical iPhone.
@@ -75,3 +75,10 @@ Reference: Apple documents that screen recording and screen mirroring cannot be 
 https://support.apple.com/guide/iphone/take-a-screen-recording-iph52f6e1987/ios
 
 The fixture is independently installed only for this test; its target is not a dependency of osu and it is not embedded in the osu app.
+
+## Multi-language iteration — 2026-09-19
+
+The September 15 phone results above belong to the earlier English/Chinese build.
+The new language selection and diagnostic code has separate local/simulator evidence
+in [the validation guide](languages-and-diagnostics.md); it has not been installed
+or accepted on a physical iPhone in this iteration.

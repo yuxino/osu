@@ -6,54 +6,56 @@ final class AudioReceiver {
   private let queue = DispatchQueue(label: "mimi.receiver")
   private var listener: NWListener?
   private var peer: NWConnection?
-  private var bytes = Data()
+  private var decoder = AudioPacketDecoder(key: MimiWire.key)
   var onAudio: ((AVAudioPCMBuffer) -> Void)?
-  var onStatus: ((String) -> Void)?
+  var onEvent: ((String, Error?, [String: Double]) -> Void)?
   private let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true)!
   private var authenticated = false
+  private var lastStatistics = Date.distantPast
   func start() throws {
     try queue.sync {
-    guard self.listener == nil else { return }
-    let parameters = NWParameters.tcp
-    parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: 49371)
-    let listener = try NWListener(using: parameters)
-    self.listener = listener
-    listener.stateUpdateHandler = { [weak self] state in
-      if case .failed(let error) = state { self?.onStatus?("接收器失败：\(error.localizedDescription)") }
-    }
-    listener.newConnectionHandler = { [weak self] c in
-      guard let self else { c.cancel(); return }
-      guard self.peer == nil else { c.cancel(); return }
-      self.peer = c; self.bytes.removeAll(keepingCapacity: true); self.authenticated = false
-      c.start(queue: self.queue); self.read(c)
-      self.queue.asyncAfter(deadline: .now() + 4) { [weak self, weak c] in
-        guard let self, let c, self.peer === c, !self.authenticated else { return }
-        self.close(c)
+      guard self.listener == nil else { return }
+      let parameters = NWParameters.tcp
+      parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: 49371)
+      let listener = try NWListener(using: parameters); self.listener = listener
+      listener.stateUpdateHandler = { [weak self, weak listener] state in
+        guard let self, let listener, self.listener === listener else { return }
+        switch state {
+        case .ready: self.onEvent?("ready", nil, [:])
+        case .failed(let error): self.onEvent?("listener_failed", error, [:])
+        default: break
+        }
       }
-    }
-    listener.start(queue: queue)
+      listener.newConnectionHandler = { [weak self, weak listener] c in
+        guard let self, let listener, self.listener === listener else { c.cancel(); return }
+        guard self.peer == nil else { c.cancel(); return }
+        self.peer = c; self.decoder = AudioPacketDecoder(key: MimiWire.key); self.authenticated = false; self.lastStatistics = .distantPast
+        c.start(queue: self.queue); self.read(c)
+        self.queue.asyncAfter(deadline: .now() + 4) { [weak self, weak c] in
+          guard let self, let c, self.peer === c, !self.authenticated else { return }
+          self.onEvent?("authentication_timeout", nil, [:]); self.close(c)
+        }
+      }
+      listener.start(queue: queue)
     }
   }
-  func stop() { queue.sync { self.listener?.cancel(); self.listener = nil; self.peer?.cancel(); self.peer = nil; self.bytes.removeAll(); self.authenticated = false } }
-  private func close(_ c: NWConnection) { c.cancel(); if peer === c { peer = nil; bytes.removeAll(); authenticated = false } }
+  func stop() { queue.sync { self.listener?.cancel(); self.listener = nil; self.peer?.cancel(); self.peer = nil; self.decoder = AudioPacketDecoder(key: MimiWire.key); self.authenticated = false } }
+  private func close(_ c: NWConnection) { c.cancel(); if peer === c { peer = nil; decoder = AudioPacketDecoder(key: MimiWire.key); authenticated = false } }
   private func read(_ c: NWConnection) {
     c.receive(minimumIncompleteLength: 1, maximumLength: 16384) { [weak self] data, _, complete, error in
       guard let self, self.peer === c else { return }
-      if let data { self.bytes.append(data) }
-      guard self.bytes.count <= 65536 else { self.close(c); self.onStatus?("音频帧超出限制"); return }
-      while let end = self.bytes.firstIndex(of: 10) {
-        let line = self.bytes.prefix(upTo: end); self.bytes.removeSubrange(...end)
-        guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any], object["key"] as? String == MimiWire.key else { self.close(c); return }
-        self.authenticated = true
-        if let event = object["event"] as? String { self.onStatus?("广播：\(event)") }
-        guard let encoded = object["audio"] as? String else { continue }
-        guard let raw = Data(base64Encoded: encoded), !raw.isEmpty, raw.count <= 32768, raw.count % 2 == 0,
-              let buffer = AVAudioPCMBuffer(pcmFormat: self.format, frameCapacity: AVAudioFrameCount(raw.count / 2)), let dest = buffer.int16ChannelData?[0] else { self.close(c); return }
-        buffer.frameLength = buffer.frameCapacity
-        raw.copyBytes(to: UnsafeMutableRawBufferPointer(start: dest, count: raw.count))
-        self.onAudio?(buffer)
-      }
-      if complete || error != nil { self.close(c); self.onStatus?("屏幕广播已结束") }
+      do {
+        for packet in try self.decoder.append(data ?? Data()) {
+          if !self.authenticated { self.authenticated = true; self.onEvent?("connected", nil, [:]) }
+          if let event = packet.event { self.onEvent?(event, nil, [:]) }
+          if Date().timeIntervalSince(self.lastStatistics) >= 5 {
+            self.lastStatistics = Date(); self.onEvent?("extension_counters", nil, ["dropped": packet.dropped, "conversionFailures": packet.conversionFailures])
+          }
+          guard let raw = packet.audio, let buffer = AVAudioPCMBuffer(pcmFormat: self.format, frameCapacity: AVAudioFrameCount(raw.count / 2)), let dest = buffer.int16ChannelData?[0] else { continue }
+          buffer.frameLength = buffer.frameCapacity; raw.copyBytes(to: UnsafeMutableRawBufferPointer(start: dest, count: raw.count)); self.onAudio?(buffer)
+        }
+      } catch { let authenticated = self.authenticated; self.onEvent?("invalid_packet", nil, [:]); self.close(c); if authenticated { self.onEvent?("failed", nil, [:]) }; return }
+      if complete || error != nil { let authenticated = self.authenticated; self.close(c); if authenticated { self.onEvent?(error == nil ? "ended" : "failed", error, [:]) } }
       else { self.read(c) }
     }
   }

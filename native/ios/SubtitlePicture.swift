@@ -7,9 +7,11 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   private var pip: AVPictureInPictureController?
   private var timer: Timer?
   private var wantsPicture = false
+  private var stopping = false
   private var readiness: NSKeyValueObservation?
   var original = "等待其他 App 的声音"
   var translated = "Mimi · 本地字幕实验"
+  var onEvent: ((String, Error?) -> Void)?
   var onStatus: ((String) -> Void)?
   var onClosed: (() -> Void)?
   private var frame: Int64 = 0
@@ -30,12 +32,13 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
       pip?.requiresLinearPlayback = true
       readiness = pip?.observe(\.isPictureInPicturePossible, options: [.new]) { [weak self] controller, _ in
         DispatchQueue.main.async {
-          guard let self, self.wantsPicture, controller.isPictureInPicturePossible else { return }
+          guard let self, self.wantsPicture, !self.stopping, controller.isPictureInPicturePossible else { return }
           controller.startPictureInPicture()
         }
       }
     }
   }
+  deinit { timer?.invalidate() }
   func layout() { layer.frame = preview.bounds }
   func prime() {
     guard timer == nil else { return }
@@ -45,11 +48,12 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   func start() {
     wantsPicture = true
     prime()
+    guard !stopping else { return }
     guard let pip else { onStatus?("此设备不支持画中画"); return }
     guard pip.isPictureInPicturePossible else { onStatus?("正在准备字幕小窗，就绪后会自动打开"); return }
     pip.startPictureInPicture()
   }
-  func stop() { wantsPicture = false; timer?.invalidate(); timer = nil; pip?.stopPictureInPicture(); layer.flushAndRemoveImage() }
+  func stop() { wantsPicture = false; timer?.invalidate(); timer = nil; stopping = stopping || active; pip?.stopPictureInPicture(); layer.flushAndRemoveImage() }
   var active: Bool { pip?.isPictureInPictureActive == true }
   var diagnostics: [String: Any] { ["possible": pip?.isPictureInPicturePossible == true, "supported": AVPictureInPictureController.isPictureInPictureSupported(), "frames": frame, "layerStatus": layer.status.rawValue, "layerError": layer.error?.localizedDescription ?? ""] }
 
@@ -88,8 +92,11 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   func pictureInPictureControllerIsPlaybackPaused(_ pictureInPictureController: AVPictureInPictureController) -> Bool { false }
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, didTransitionToRenderSize newRenderSize: CMVideoDimensions) {}
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, skipByInterval skipInterval: CMTime, completion: @escaping () -> Void) { completion() }
-  func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) { wantsPicture = false; onStatus?("字幕小窗已开启") }
-  func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) { onStatus?("小窗失败：\(error.localizedDescription)") }
-  func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) { onClosed?() }
+  func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) { wantsPicture = false; onEvent?("started", nil); onStatus?("字幕小窗已开启") }
+  func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) { onEvent?("failed", error); onStatus?("小窗启动失败，错误代码已写入诊断。") }
+  func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+    let programmatic = stopping; stopping = false; onEvent?("stopped", nil)
+    if wantsPicture { start() } else if !programmatic { onClosed?() }
+  }
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) { completionHandler(true) }
 }

@@ -11,10 +11,16 @@ final class SampleHandler: RPBroadcastSampleHandler {
   private var pending = false
   private var stopped = false
   private var dropped = 0
+  private var conversionFailures = 0
+  private var frames = 0
+  private var lastLog = Date.distantPast
+  private let log = DiagnosticStore.shared
   private let outputFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true)!
 
   override func broadcastStarted(withSetupInfo setupInfo: [String : NSObject]?) {
     queue.async {
+      self.log.begin(source: "app_audio", target: "host")
+      self.log.record("broadcast", "started")
       let c = NWConnection(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: 49371)!, using: .tcp)
       self.connection = c
       c.stateUpdateHandler = { [weak self] state in
@@ -22,16 +28,17 @@ final class SampleHandler: RPBroadcastSampleHandler {
         switch state {
         case .ready:
           self.ready = true
+          self.log.record("transport", "connected")
           self.send(["event": "started", "key": MimiWire.key])
           self.watchHost(c)
-        case .failed(let error): self.end("字幕接收器不可用：\(error.localizedDescription)")
+        case .failed(let error): self.log.record("transport", "failed", error: error); self.end("字幕接收器不可用：\(error.localizedDescription)")
         default: break
         }
       }
       c.start(queue: self.queue)
       self.queue.asyncAfter(deadline: .now() + 8) { [weak self] in
         guard let self, !self.ready, !self.stopped else { return }
-        self.end("请先在 osu 中开启字幕小窗，再开始广播。")
+        self.log.record("transport", "host_timeout"); self.end("请先在 osu 中开启字幕小窗，再开始广播。")
       }
     }
   }
@@ -39,14 +46,14 @@ final class SampleHandler: RPBroadcastSampleHandler {
   private func watchHost(_ c: NWConnection) {
     c.receive(minimumIncompleteLength: 1, maximumLength: 128) { [weak self] _, _, complete, error in
       guard let self, !self.stopped else { return }
-      if complete || error != nil { self.end("字幕会话已停止。") }
+      if complete || error != nil { self.log.record("transport", "host_closed", error: error); self.end("字幕会话已停止。") }
       else { self.watchHost(c) }
     }
   }
 
-  override func broadcastPaused() { queue.async { self.send(["key": MimiWire.key, "event": "paused"]) } }
-  override func broadcastResumed() { queue.async { self.send(["key": MimiWire.key, "event": "resumed"]) } }
-  override func broadcastFinished() { queue.async { self.stopped = true; self.ready = false; self.connection?.cancel(); self.connection = nil } }
+  override func broadcastPaused() { queue.async { self.log.record("broadcast", "paused"); self.send(["key": MimiWire.key, "event": "paused"]) } }
+  override func broadcastResumed() { queue.async { self.log.record("broadcast", "resumed"); self.send(["key": MimiWire.key, "event": "resumed"]) } }
+  override func broadcastFinished() { queue.async { self.log.record("broadcast", "finished"); self.stopped = true; self.ready = false; self.connection?.cancel(); self.connection = nil } }
 
   override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
     guard sampleBufferType == .audioApp else { return }
@@ -67,10 +74,15 @@ final class SampleHandler: RPBroadcastSampleHandler {
         if supplied { status.pointee = .noDataNow; return nil }
         supplied = true; status.pointee = .haveData; return pcm
       }
-      guard error == nil, output.frameLength > 0, let samples = output.int16ChannelData?[0] else { return }
+      guard error == nil, output.frameLength > 0, let samples = output.int16ChannelData?[0] else {
+        conversionFailures += 1
+        if conversionFailures == 1 { log.record("audio", "conversion_failed", error: error); send(["key": MimiWire.key, "event": "conversion_failed"]) }; return
+      }
       let data = Data(bytes: samples, count: Int(output.frameLength) * 2)
       guard data.count <= 32768 else { return }
-      send(["key": MimiWire.key, "audio": data.base64EncodedString(), "dropped": dropped])
+      frames += 1
+      if Date().timeIntervalSince(lastLog) >= 5 { lastLog = Date(); log.record("audio", "counters", metrics: ["audioFrames": Double(frames), "dropped": Double(dropped), "conversionFailures": Double(conversionFailures)]) }
+      send(["key": MimiWire.key, "audio": data.base64EncodedString(), "dropped": dropped, "conversionFailures": conversionFailures])
     }
   }
 
@@ -79,11 +91,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
     pending = true
     connection?.send(content: data + Data([10]), completion: .contentProcessed { [weak self] error in
       guard let self else { return }; self.pending = false
-      if let error { self.end("音频传输中断：\(error.localizedDescription)") }
+      if let error { self.log.record("transport", "send_failed", error: error); self.end("音频传输中断：\(error.localizedDescription)") }
     })
   }
   private func end(_ message: String) {
-    guard !stopped else { return }; stopped = true; ready = false; connection?.cancel()
+    guard !stopped else { return }; log.record("broadcast", "ended"); stopped = true; ready = false; connection?.cancel()
     finishBroadcastWithError(NSError(domain: "MimiPrototype", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
   }
 }
