@@ -13,6 +13,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
   private let lifecycle = CloudLifecycleFixture()
   private let cloudUI = CloudUIFixture()
   private let captureStartup = CaptureStartupFixture()
+  private let sessionFinish = SessionFinishFixture()
   private let sample = CloudSampleTest()
   private var completed = false
   private let queue = DispatchQueue(label: "mimi.simulator.tests")
@@ -20,8 +21,10 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     let w = UIWindow(frame: UIScreen.main.bounds)
     let arguments = ProcessInfo.processInfo.arguments
     let category = AVAudioSession.sharedInstance().category, mode = AVAudioSession.sharedInstance().mode
-    w.rootViewController = arguments.contains("--capture-ui") || arguments.contains("--verify-capture-start") ? cloudUI.controller(ready: true) : (arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController())
-    if arguments.contains("--lyrics-ui") { w.rootViewController = LyricsDemoController() }
+    let backgroundFinish = arguments.contains("--verify-background-finish") || arguments.contains("--verify-background-timeout")
+    if arguments.contains("--verify-session-finish") || backgroundFinish { w.rootViewController = sessionFinish.controller(systemBackground: backgroundFinish) }
+    else if arguments.contains("--lyrics-ui") { w.rootViewController = LyricsDemoController() }
+    else { w.rootViewController = arguments.contains("--capture-ui") || arguments.contains("--verify-capture-start") ? cloudUI.controller(ready: true) : (arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController()) }
     w.makeKeyAndVisible(); window = w
     if arguments.contains("--export-lyrics") {
       Task { @MainActor in
@@ -33,6 +36,10 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     }
     if arguments.contains("--verify-capture-start"), let controller = w.rootViewController as? MimiPrototypeController {
       captureStartup.run(controller: controller, fixture: cloudUI) { [weak self] ok, result in self?.finish(ok, result) }
+    }
+    if let controller = w.rootViewController as? MimiPrototypeController {
+      if arguments.contains("--verify-session-finish") { sessionFinish.run(controller: controller) { [weak self] ok, result in self?.finish(ok, result) } }
+      if backgroundFinish { sessionFinish.runInBackground(controller: controller, acknowledge: arguments.contains("--verify-background-finish")) { [weak self] ok, result in self?.finish(ok, result) } }
     }
     if arguments.contains("--verify-media-idle") {
       let picture = SubtitlePicture(); picture.preview.frame = CGRect(x: 0, y: 0, width: 320, height: 192); picture.layout()
@@ -82,13 +89,14 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     c.start(queue: queue)
   }
   private func finish(_ passed: Bool, _ result: String) {
-    DispatchQueue.main.async { [self] in
+    let record = { [self] in
       guard !completed else { return }; completed = true
       receiver.stop(); client?.cancel()
       let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("simulator-test.json")
       let data = try! JSONSerialization.data(withJSONObject: ["screenRecorderAvailable": RPScreenRecorder.shared().isAvailable, "pictureInPictureSupported": AVPictureInPictureController.isPictureInPictureSupported(), "passed": passed, "result": result, "timestamp": ISO8601DateFormatter().string(from: Date()), "scope": "Production receiver/client, fixture input only; no live Alibaba, ReplayKit or Apple model acceptance"])
       try! data.write(to: url, options: .atomic)
     }
+    if Thread.isMainThread { record() } else { DispatchQueue.main.async(execute: record) }
   }
 }
 

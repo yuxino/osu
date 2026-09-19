@@ -31,6 +31,12 @@ import Network
     return try await withCheckedThrowingContinuation { waiting = $0 }
   }
   func ping() async throws { if closed { throw AlibabaProtocol.Failure.transport } }
+  func confirmFinish() {
+    guard !closed, sentFinish == 1 else { return }
+    push(["type": "conversation.item.input_audio_transcription.completed", "item_id": "tail", "transcript": "最後の一文です。"])
+    push(["type": "response.text.done", "response_id": "tail", "text": "这是最后一句。"])
+    push(["type": "session.finished"])
+  }
   func close() { guard !closed else { return }; closed = true; waiting?.resume(throwing: AlibabaProtocol.Failure.transport); waiting = nil; messages.removeAll(); onClose?() }
 }
 
