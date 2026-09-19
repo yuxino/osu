@@ -619,7 +619,7 @@ final class MimiPrototypeController: UIViewController {
     }
   }
   private var metrics: [String: Double] {
-    ["sourceFinals": Double(sourceFinals), "translationFinals": Double(translationFinals), "cloudBytes": Double(cloudBytes), "audioFrames": Double(receivedFrames), "audioSeconds": seconds, "recognitionUpdates": Double(recognitionUpdates), "translationUpdates": Double(translationUpdates), "peak": peak, "elapsed": Date().timeIntervalSince(sessionStarted), "translationMS": translationMS, "recognitionRestarts": Double(recognitionRestarts), "audioGapSeconds": receivedFrames == 0 ? Date().timeIntervalSince(sessionStarted) : Date().timeIntervalSince(lastAudio)]
+    ["sourceFinals": Double(sourceFinals), "translationFinals": Double(translationFinals), "cloudBytes": Double(cloudBytes), "audioFrames": Double(receivedFrames), "audioSeconds": seconds, "recognitionUpdates": Double(recognitionUpdates), "translationUpdates": Double(translationUpdates), "peak": peak, "elapsed": Date().timeIntervalSince(sessionStarted), "translationMS": translationMS, "recognitionRestarts": Double(recognitionRestarts), "audioGapSeconds": receivedFrames == 0 ? Date().timeIntervalSince(sessionStarted) : Date().timeIntervalSince(lastAudio)].merging(picture.metrics) { _, new in new }
   }
   private func writeSnapshot() { log.snapshot(running: running, pip: running && picture.active, metrics: metrics, captureState: testingSample ? "sample" : capture.state(at: ProcessInfo.processInfo.systemUptime).rawValue) }
   private func updateCounts() {

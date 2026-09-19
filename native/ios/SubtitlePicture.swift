@@ -14,7 +14,9 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   private var pip: AVPictureInPictureController?
   private var timer: Timer?
   private var wantsPicture = false
+  private var starting = false
   private var stopping = false
+  private var lastStartAttempt = Date.distantPast
   private var readiness: NSKeyValueObservation?
   var original = "播放一段你想听懂的内容" { didSet { updateAccessibility() } }
   var translated = "字幕会出现在这里" { didSet { updateAccessibility() } }
@@ -56,10 +58,11 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
       pip = AVPictureInPictureController(contentSource: .init(sampleBufferDisplayLayer: layer, playbackDelegate: self))
       pip?.delegate = self
       pip?.requiresLinearPlayback = true
+      pip?.canStartPictureInPictureAutomaticallyFromInline = true
       readiness = pip?.observe(\.isPictureInPicturePossible, options: [.new]) { [weak self] controller, _ in
         DispatchQueue.main.async {
-          guard let self, self.wantsPicture, !self.stopping, controller.isPictureInPicturePossible else { return }
-          controller.startPictureInPicture()
+          guard let self, self.pip === controller else { return }
+          self.attemptStart()
         }
       }
     }
@@ -100,29 +103,40 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
     still.isHidden = true
     guard timer == nil else { return }
     render()
-    timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.render() }
+    let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in self?.render(); self?.attemptStart() }
+    self.timer = timer; RunLoop.main.add(timer, forMode: .common)
+    pip?.invalidatePlaybackState()
   }
   func start() {
     wantsPicture = true
     guard !stopping else { return }
     prime()
-    guard let pip else { onStatus?("此设备不支持画中画"); return }
-    guard pip.isPictureInPicturePossible else { onStatus?("正在准备字幕小窗，就绪后会自动打开"); return }
-    pip.startPictureInPicture()
+    guard pip != nil else { onStatus?("此设备不支持画中画"); return }
+    onStatus?("正在准备字幕小窗。如果已有视频小窗，请先将视频恢复到原 App 内播放。")
+    attemptStart()
+  }
+  private func attemptStart() {
+    guard wantsPicture, !starting, !stopping, let pip, !pip.isPictureInPictureActive, pip.isPictureInPicturePossible,
+          Date().timeIntervalSince(lastStartAttempt) >= 1 else { return }
+    // Another app's PiP can make start a no-op without changing `possible`.
+    // Keep the explicit request pending until its delegate actually starts.
+    lastStartAttempt = Date(); pip.startPictureInPicture()
   }
   func stop() {
     wantsPicture = false; timer?.invalidate(); timer = nil
+    pip?.invalidatePlaybackState()
     if let timebase = layer?.controlTimebase { CMTimebaseSetRate(timebase, rate: 0) }
     layer?.flushAndRemoveImage(); still.isHidden = false
-    if active { stopping = true; pip?.stopPictureInPicture() } else { releaseMedia() }
+    if active || starting { stopping = true; pip?.stopPictureInPicture() } else { releaseMedia() }
   }
   private func releaseMedia() {
     readiness?.invalidate(); readiness = nil
     pip?.delegate = nil; pip = nil
-    layer?.removeFromSuperlayer(); layer = nil; stopping = false
+    layer?.removeFromSuperlayer(); layer = nil; stopping = false; starting = false; lastStartAttempt = .distantPast
   }
   var active: Bool { pip?.isPictureInPictureActive == true }
   var diagnostics: [String: Any] { ["possible": pip?.isPictureInPicturePossible == true, "supported": AVPictureInPictureController.isPictureInPictureSupported(), "frames": frame, "mediaCreated": layer != nil, "layerStatus": layer?.status.rawValue ?? 0, "layerError": layer?.error?.localizedDescription ?? ""] }
+  var metrics: [String: Double] { ["pipPossible": pip?.isPictureInPicturePossible == true ? 1 : 0, "pipFrames": Double(frame), "pipStarting": starting ? 1 : 0, "pipLayerStatus": Double(layer?.status.rawValue ?? 0)] }
 
   private func render() {
     guard let layer else { return }
@@ -166,8 +180,19 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   func pictureInPictureControllerIsPlaybackPaused(_ pictureInPictureController: AVPictureInPictureController) -> Bool { timer == nil }
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, didTransitionToRenderSize newRenderSize: CMVideoDimensions) {}
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, skipByInterval skipInterval: CMTime, completion: @escaping () -> Void) { completion() }
-  func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) { wantsPicture = false; onEvent?("started", nil); onStatus?("字幕小窗已开启") }
-  func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) { onEvent?("failed", error); onStatus?("小窗启动失败，错误代码已写入诊断。") }
+  func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+    guard pip === pictureInPictureController else { return }; starting = true; onEvent?("starting", nil)
+  }
+  func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+    guard pip === pictureInPictureController else { return }; starting = false
+    if stopping || !wantsPicture { pictureInPictureController.stopPictureInPicture(); return }
+    wantsPicture = false; onEvent?("started", nil); onStatus?("字幕小窗已开启")
+  }
+  func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
+    guard pip === pictureInPictureController else { return }; starting = false
+    if stopping { let restart = wantsPicture; releaseMedia(); if restart { start() }; return }
+    wantsPicture = false; onEvent?("failed", error); onStatus?("小窗启动失败，错误代码已写入诊断。")
+  }
   func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
     guard pip === pictureInPictureController else { return }
     let programmatic = stopping; stopping = false; onEvent?("stopped", nil)
