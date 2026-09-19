@@ -8,23 +8,32 @@ import UIKit
     do {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
       var rows: [[String: Any]] = []
-      var passed = true
+      let picture = SubtitlePicture()
+      picture.resetLyrics(original: "Source text", translated: "只显示译文")
+      let hiddenByDefault = !picture.showsOriginal && picture.preview.accessibilityValue == "只显示译文"
+      picture.showsOriginal = true
+      let visibleWhenEnabled = picture.preview.accessibilityValue == "Source text\n只显示译文"
+      picture.showsOriginal = false
+      picture.resetLyrics(original: "仅原文仍可阅读", translated: "", translationEnabled: false)
+      let originalOnlyReadable = picture.preview.accessibilityValue == "仅原文仍可阅读"
+      var passed = hiddenByDefault && visibleWhenEnabled && originalOnlyReadable
       let category = UIApplication.shared.preferredContentSizeCategory
       let name = category.isAccessibilityCategory ? "largest" : "regular"
-      for long in [false, true] {
-        let label = name + (long ? "-long" : "-short")
+      for (long, showsOriginal) in [(false, true), (true, true), (false, false), (true, false)] {
+        let label = name + (long ? "-long" : "-short") + (showsOriginal ? "" : "-translation-only")
         let previous = long ? "前一句有些长，但读完之后仍应留下一行，让人能接着看懂。" : "上一句仍然可见"
         let current = long ? String(repeating: "今天我们继续看日语视频，字幕会跟着声音出现，不需要停留在应用里。", count: 5) : "字幕跟着声音出现。"
-        let original = long ? "You can keep watching the video in its original app while the translated lyrics appear above it. " + String(repeating: "The next sentence arrives shortly. ", count: 3) : "Keep watching in your video app."
+        let sourceText = long ? "You can keep watching the video in its original app while the translated lyrics appear above it. " + String(repeating: "The next sentence arrives shortly. ", count: 3) : "Keep watching in your video app."
+        let original = showsOriginal ? sourceText : ""
         let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true; format.preferredRange = .standard
         let renderer = UIGraphicsImageRenderer(size: LyricsPainter.size, format: format)
         let image = renderer.image { context in
           LyricsPainter.draw(in: context.cgContext, bounds: CGRect(origin: .zero, size: LyricsPainter.size), previous: previous, current: current, original: original, progress: 1)
         }
         try? image.pngData()?.write(to: directory.appendingPathComponent(label + ".png"))
-        let prior = visiblePixels(image, in: CGRect(x: 48, y: 20, width: 864, height: 85))
+        let prior = visiblePixels(image, in: CGRect(x: 48, y: 20, width: 864, height: 72))
         let active = visiblePixels(image, in: CGRect(x: 48, y: 112, width: 864, height: 168))
-        let source = visiblePixels(image, in: CGRect(x: 48, y: 326, width: 864, height: 80))
+        let source = visiblePixels(image, in: showsOriginal ? CGRect(x: 48, y: 326, width: 864, height: 80) : CGRect(x: 48, y: 366, width: 864, height: 60))
         var durations: [Double] = []
         for index in 0..<30 {
           let start = CACurrentMediaTime()
@@ -36,11 +45,11 @@ import UIKit
           durations.append((CACurrentMediaTime() - start) * 1000)
         }
         durations.sort()
-        let visible = prior > 100 && active > 100 && source > 100
+        let visible = prior > 100 && active > 100 && (showsOriginal ? source > 100 : source == 0)
         passed = passed && visible
-        rows.append(["case": label, "previousPixels": prior, "currentPixels": active, "originalPixels": source, "scaledPreviousFont": UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: 34), maximumPointSize: 51).pointSize, "medianRenderMS": durations[15], "p95RenderMS": durations[28], "visible": visible])
+        rows.append(["case": label, "showsOriginal": showsOriginal, "previousPixels": prior, "currentPixels": active, "originalPixels": source, "scaledPreviousFont": UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: 34), maximumPointSize: 51).pointSize, "medianRenderMS": durations[15], "p95RenderMS": durations[28], "visible": visible])
       }
-      let document: [String: Any] = ["cases": rows, "category": category.rawValue, "passed": passed, "scope": "Fixed text, production CoreGraphics painter; simulator timings are not phone performance", "timestamp": ISO8601DateFormatter().string(from: Date())]
+      let document: [String: Any] = ["cases": rows, "category": category.rawValue, "passed": passed, "hiddenByDefault": hiddenByDefault, "visibleWhenEnabled": visibleWhenEnabled, "originalOnlyReadable": originalOnlyReadable, "scope": "Fixed text, production CoreGraphics painter; simulator timings are not phone performance", "timestamp": ISO8601DateFormatter().string(from: Date())]
       try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys]).write(to: directory.appendingPathComponent("result.json"), options: .atomic)
       return (passed, "lyrics_visibility_at_current_text_size")
     } catch { return (false, "lyrics_layout_export_failed") }

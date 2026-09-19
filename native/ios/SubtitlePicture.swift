@@ -22,10 +22,12 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   private var stopping = false
   private var lastStartAttempt = Date.distantPast
   private var readiness: NSKeyValueObservation?
+  var showsOriginal = false { didSet { updateAccessibility(); showStill() } }
   var original = "播放一段你想听懂的内容" { didSet { updateAccessibility() } }
   var translated = "字幕会出现在这里" { didSet { updateAccessibility() } }
   private func updateAccessibility() {
-    preview.accessibilityLabel = "字幕"; preview.accessibilityValue = original + "\n" + translated
+    preview.accessibilityLabel = "字幕"
+    preview.accessibilityValue = translationEnabled ? (showsOriginal ? original + "\n" + translated : translated) : original
     preview.setNeedsDisplay()
   }
   func showStill() {
@@ -62,7 +64,7 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   private func drawLyrics(in context: CGContext, bounds: CGRect) {
     let track = translationEnabled ? translationTrack : sourceTrack
     let progress = UIAccessibility.isReduceMotionEnabled ? 1 : CGFloat(min(1, (CACurrentMediaTime() - transitionStarted) / 0.36))
-    LyricsPainter.draw(in: context, bounds: bounds, previous: track.previous?.text ?? "", current: translationEnabled ? translated : original, original: translationEnabled ? original : "", progress: progress)
+    LyricsPainter.draw(in: context, bounds: bounds, previous: track.previous?.text ?? "", current: translationEnabled ? translated : original, original: translationEnabled && showsOriginal ? original : "", progress: progress)
   }
   var onEvent: ((String, Error?) -> Void)?
   var onStatus: ((String) -> Void)?

@@ -24,11 +24,14 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     let category = AVAudioSession.sharedInstance().category, mode = AVAudioSession.sharedInstance().mode
     let backgroundFinish = arguments.contains("--verify-background-finish") || arguments.contains("--verify-background-timeout")
     let stream = arguments.contains("--verify-stream-smoke") || arguments.contains("--verify-stream-endurance")
-    if stream { w.rootViewController = endurance.controller() }
+    let motion = arguments.contains("--verify-motion") || arguments.contains("--verify-reduced-motion")
+    if motion { w.rootViewController = UIViewController() }
+    else if stream { w.rootViewController = endurance.controller() }
     else if arguments.contains("--verify-session-finish") || backgroundFinish { w.rootViewController = sessionFinish.controller(systemBackground: backgroundFinish) }
     else if arguments.contains("--lyrics-ui") { w.rootViewController = LyricsDemoController() }
     else { w.rootViewController = arguments.contains("--capture-ui") || arguments.contains("--verify-capture-start") ? cloudUI.controller(ready: true) : (arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController()) }
     w.makeKeyAndVisible(); window = w
+    if motion, let view = w.rootViewController?.view { MotionFixture.run(in: view, reduced: arguments.contains("--verify-reduced-motion")) { [weak self] ok, result in self?.finish(ok, result) } }
     if arguments.contains("--verify-lyrics-layout") { let result = LyricsRenderFixture.run(); finish(result.0, result.1) }
     if arguments.contains("--export-lyrics") {
       Task { @MainActor in

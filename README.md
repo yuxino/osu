@@ -1,11 +1,11 @@
 <div align="center">
   <img src="assets/brand/mimi-maid-v1.png" width="112" height="112" alt="Osu mascot">
   <h1>Osu</h1>
-  <p>Live bilingual subtitles for your iPhone.</p>
+  <p>Live translated subtitles for your iPhone.</p>
   <p>
     <a href="README_ZH.md">简体中文</a>
     · <a href="CONTRIBUTING.md">Build from source</a>
-    · <a href="docs/acceptance/2026-09-19.md">Test status</a>
+    · <a href="docs/acceptance/2026-09-20.md">Test status</a>
   </p>
 </div>
 
@@ -15,7 +15,7 @@ Turn audio from other apps into a floating subtitle window. Inspired by [Mimi](h
 
 ## Features
 
-- **Lyrics-style captions** — cloud translations move up sentence by sentence, with the current line prominent and the previous line faded.
+- **Lyrics-style captions** — cloud translations move up sentence by sentence, with the current line prominent and the previous line faded. Translations appear alone by default; enable the original text in settings.
 - **Automatic language detection** — Alibaba mode detects the spoken language and translates into Chinese by default. Change either language when needed.
 - **Local or cloud** — choose Apple on-device recognition and translation, or Alibaba Cloud realtime translation. Apple translation requires iOS 26 and supported language packs; local recognition requires a manually selected source language.
 

@@ -45,6 +45,8 @@ final class MimiPrototypeController: UIViewController {
   private var sourceFinals = 0, translationFinals = 0
   private var sampleRepeats = 1
   private var settingsPage: UIViewController?
+  private let originalSwitch = UISwitch()
+  private let originalHint = UILabel()
   private let serviceHint = UILabel()
   private let broadcastRow = UIStackView()
   private let cloudTestSection = UIStackView()
@@ -101,6 +103,7 @@ final class MimiPrototypeController: UIViewController {
     self.readCloudCredential = readCloudCredential ?? { try CloudCredentialStore.read() }
     self.picture = picture; self.backgroundTasks = backgroundTasks ?? .application
     super.init(nibName: nil, bundle: nil)
+    picture.showsOriginal = UserDefaults.standard.bool(forKey: "osu.showOriginalSubtitles")
   }
   required init?(coder: NSCoder) { fatalError("Use init()") }
 
@@ -204,6 +207,9 @@ final class MimiPrototypeController: UIViewController {
     keyButton = button("阿里云密钥", #selector(configureCloudKey))
     keyButton.configuration?.image = UIImage(systemName: "chevron.right")
     localRefreshButton = button("重新检查本地语言", #selector(refreshPressed))
+    originalSwitch.isOn = picture.showsOriginal; originalSwitch.onTintColor = .label; originalSwitch.accessibilityLabel = "显示原文"
+    originalSwitch.addTarget(self, action: #selector(originalVisibilityChanged), for: .valueChanged)
+    originalHint.numberOfLines = 0; originalHint.font = UIFont.preferredFont(forTextStyle: .footnote); originalHint.adjustsFontForContentSizeCategory = true; originalHint.textColor = .secondaryLabel
     languageStatus.numberOfLines = 0; languageStatus.font = UIFont.preferredFont(forTextStyle: .footnote); languageStatus.adjustsFontForContentSizeCategory = true; languageStatus.textColor = .secondaryLabel
     counts.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular); counts.numberOfLines = 0; counts.textColor = .secondaryLabel; counts.text = "尚未收到音频"
     sampleButton = button("测试日语同传", #selector(startSampleTest)); longSampleButton = button("连续测试 · 约一分钟", #selector(startLongSampleTest))
@@ -240,6 +246,11 @@ final class MimiPrototypeController: UIViewController {
     let stack = pageStack(in: page.view, top: 28, below: heading)
     stack.addArrangedSubview(engineButton); stack.addArrangedSubview(keyButton); stack.addArrangedSubview(languageStatus)
     stack.addArrangedSubview(localRefreshButton)
+    let originalTitle = label("显示原文", size: 17); originalTitle.isAccessibilityElement = false
+    let originalRow = UIStackView(arrangedSubviews: [originalTitle, originalSwitch]); originalRow.axis = .horizontal; originalRow.alignment = .center; originalRow.spacing = 16
+    originalSwitch.setContentHuggingPriority(.required, for: .horizontal); originalSwitch.setContentCompressionResistancePriority(.required, for: .horizontal)
+    originalRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+    stack.addArrangedSubview(originalRow); stack.addArrangedSubview(originalHint); stack.setCustomSpacing(4, after: originalRow)
     let usage = label("默认自动识别声音并翻译成中文。想指定语言时，再点首页的语言选项。\n\n点「开始听」，按提示开启 Osu Audio 广播。字幕小窗出现后，回到原来的 App 继续播放。关闭字幕小窗也会停止收音。\n\n视频请留在原 App 内播放：iPhone 的视频小窗会替换字幕小窗。广播期间需关闭 iPhone 镜像。\n\nOsu 只处理 App 声音，丢弃视频和麦克风数据，不保存录音或字幕。部分受保护内容无法采集。", size: 14); usage.textColor = .secondaryLabel
     addDisclosure("使用与隐私", content: usage, to: stack)
     let diagnostics = UIStackView(); diagnostics.axis = .vertical; diagnostics.spacing = 16
@@ -270,6 +281,10 @@ final class MimiPrototypeController: UIViewController {
     stack.addArrangedSubview(toggle); stack.addArrangedSubview(content); stack.setCustomSpacing(8, after: divider)
   }
   @objc private func closeSettings() { settingsPage?.dismiss(animated: true) }
+  @objc private func originalVisibilityChanged() {
+    picture.showsOriginal = originalSwitch.isOn
+    UserDefaults.standard.set(originalSwitch.isOn, forKey: "osu.showOriginalSubtitles")
+  }
   private func dismissSettingsThen(_ work: @escaping () -> Void) { if let page = settingsPage, page.presentingViewController != nil { page.dismiss(animated: true, completion: work) } else { work() } }
   private var presenter: UIViewController { if let page = settingsPage, page.presentingViewController != nil { return page }; return self }
   private func chooseEngine(_ value: SubtitleEngine) {
@@ -389,6 +404,8 @@ final class MimiPrototypeController: UIViewController {
     let busy = running || startPending || downloading
     cloudTestSection.isHidden = engine != .alibaba
     localRefreshButton.isHidden = engine != .apple; localRefreshButton.isEnabled = !busy
+    originalSwitch.isEnabled = engine == .alibaba || !selection.target.isEmpty
+    originalHint.text = originalSwitch.isEnabled ? "在译文下方显示原文。" : "当前只显示原文，选择字幕语言后可使用此选项。"
     sampleButton.isEnabled = !busy && ["auto", "ja"].contains(selection.source) && AlibabaProtocol.valid(source: selection.source, target: selection.target)
     sampleButton.configuration?.title = selection.source == "auto" ? "测试自动识别" : "测试日语同传"
     longSampleButton.isEnabled = sampleButton.isEnabled

@@ -12,10 +12,12 @@ enum LyricsPainter {
     context.setFillColor(UIColor.black.cgColor); context.fill(CGRect(origin: .zero, size: size))
     let p = max(0, min(1, progress)), ease = 1 - pow(1 - p, 3)
     let hasPrevious = !previous.isEmpty
+    let currentY: CGFloat = original.isEmpty ? 84 : 112
+    let currentHeight: CGFloat = original.isEmpty ? 272 : 168
     if hasPrevious {
-      text(previous, rect: CGRect(x: 48, y: 112 - 88 * ease, width: 864, height: 168 - 96 * ease), fontSize: 60 - 26 * ease, weight: .medium, opacity: 1 - 0.64 * ease)
+      text(previous, rect: CGRect(x: 48, y: currentY + (24 - currentY) * ease, width: 864, height: currentHeight + (72 - currentHeight) * ease), fontSize: 60 - 26 * ease, weight: .medium, opacity: 1 - 0.64 * ease)
     }
-    text(current, rect: CGRect(x: 48, y: 112 + (hasPrevious ? 68 * (1 - ease) : 0), width: 864, height: 168), fontSize: 60, weight: .semibold, opacity: hasPrevious ? ease : 1)
+    text(current, rect: CGRect(x: 48, y: currentY + (hasPrevious ? 68 * (1 - ease) : 0), width: 864, height: currentHeight), fontSize: 60, weight: .semibold, opacity: hasPrevious ? ease : 1)
     if !original.isEmpty {
       text(original, rect: CGRect(x: 48, y: 326, width: 864, height: 80), fontSize: 32, weight: .regular, opacity: 0.58)
     }

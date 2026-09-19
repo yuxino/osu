@@ -1,11 +1,11 @@
 <div align="center">
   <img src="assets/brand/mimi-maid-v1.png" width="112" height="112" alt="Osu 头像">
   <h1>Osu</h1>
-  <p>在 iPhone 上，边听边看双语字幕。</p>
+  <p>在 iPhone 上，边听边看译文。</p>
   <p>
     <a href="README.md">English</a>
     · <a href="CONTRIBUTING.md">从源码安装</a>
-    · <a href="docs/acceptance/2026-09-19.md">测试记录</a>
+    · <a href="docs/acceptance/2026-09-20.md">测试记录</a>
   </p>
 </div>
 
@@ -15,7 +15,7 @@
 
 ## 功能
 
-- **像歌词一样显示**：云端字幕逐句上移，当前译文醒目，上一句淡下去。
+- **像歌词一样显示**：云端字幕逐句上移，当前译文醒目，上一句淡下去。默认只看译文，原文可在设置中打开。
 - **自动识别语言**：阿里云模式默认自动识别原文、翻译成中文，想指定语言时再选。
 - **本地或云端**：可选 Apple 本地识别与翻译，或阿里云实时同传。Apple 翻译需要 iOS 26 和支持的语言包，本地识别需手动指定原文语言。
 
