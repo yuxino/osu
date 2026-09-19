@@ -1,30 +1,57 @@
 import UIKit
+import ImageIO
 
 enum LyricsPainter {
   static let size = CGSize(width: 960, height: 440)
   static var aspect: CGFloat { size.height / size.width }
+  // Decode the existing character once at its rendered size, not on each frame.
+  private static let character: UIImage? = {
+    guard let url = Bundle.main.url(forResource: "mimi-maid-v1", withExtension: "png"),
+          let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: 160,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true
+          ] as CFDictionary) else { return nil }
+    return UIImage(cgImage: image)
+  }()
 
   static func draw(in context: CGContext, bounds: CGRect, previous: String, current: String, original: String, progress: CGFloat) {
     guard bounds.width > 0, bounds.height > 0 else { return }
     context.saveGState(); defer { context.restoreGState() }
     context.translateBy(x: bounds.minX, y: bounds.minY)
     context.scaleBy(x: bounds.width / size.width, y: bounds.height / size.height)
-    context.setFillColor(UIColor.black.cgColor); context.fill(CGRect(origin: .zero, size: size))
+    context.setFillColor(UIColor(white: 0.035, alpha: 1).cgColor); context.fill(CGRect(origin: .zero, size: size))
+    signature()
+    context.setFillColor(UIColor(white: 1, alpha: 0.12).cgColor)
+    context.fill(CGRect(x: 48, y: 108, width: 864, height: 1))
     let p = max(0, min(1, progress)), ease = 1 - pow(1 - p, 3)
     let hasPrevious = !previous.isEmpty
-    let currentY: CGFloat = original.isEmpty ? 84 : 112
-    let currentHeight: CGFloat = original.isEmpty ? 272 : 168
+    let currentY: CGFloat = 118
+    let currentHeight: CGFloat = original.isEmpty ? 272 : 180
     if hasPrevious {
-      text(previous, rect: CGRect(x: 48, y: currentY + (24 - currentY) * ease, width: 864, height: currentHeight + (72 - currentHeight) * ease), fontSize: 60 - 26 * ease, weight: .medium, opacity: 1 - 0.64 * ease)
+      text(previous, rect: CGRect(x: 48, y: 24, width: 644, height: 72), fontSize: 30, weight: .regular, opacity: 0.46)
     }
-    text(current, rect: CGRect(x: 48, y: currentY + (hasPrevious ? 68 * (1 - ease) : 0), width: 864, height: currentHeight), fontSize: 60, weight: .semibold, opacity: hasPrevious ? ease : 1)
+    // Keep text in separate bands even when a long sentence changes. The new
+    // line settles upward without overlapping the previous line or disappearing.
+    text(current, rect: CGRect(x: 48, y: currentY + (hasPrevious ? 24 * (1 - ease) : 0), width: 864, height: currentHeight), fontSize: 66, weight: .medium, opacity: hasPrevious ? 0.56 + 0.44 * ease : 1)
     if !original.isEmpty {
-      text(original, rect: CGRect(x: 48, y: 326, width: 864, height: 80), fontSize: 32, weight: .regular, opacity: 0.58)
+      text(original, rect: CGRect(x: 48, y: 334, width: 864, height: 80), fontSize: 32, weight: .regular, opacity: 0.62)
     }
   }
 
+  private static func signature() {
+    character?.draw(in: CGRect(x: 752, y: 28, width: 64, height: 64))
+    let base = UIFont.systemFont(ofSize: 40, weight: .semibold)
+    let font = base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: 40) } ?? base
+    ("Osu" as NSString).draw(at: CGPoint(x: 829, y: 35), withAttributes: [
+      .font: font, .foregroundColor: UIColor(white: 0.9, alpha: 1), .kern: -0.5
+    ])
+  }
+
   private static func text(_ value: String, rect: CGRect, fontSize: CGFloat, weight: UIFont.Weight, opacity: CGFloat) {
-    let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center; paragraph.lineBreakMode = .byWordWrapping; paragraph.lineSpacing = 8
+    let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .left; paragraph.lineBreakMode = .byWordWrapping; paragraph.lineSpacing = 8
     let font = UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: fontSize, weight: weight), maximumPointSize: fontSize * 1.5)
     let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor(white: 1, alpha: opacity), .paragraphStyle: paragraph]
     let visible = String(value.suffix(400)).trimmingCharacters(in: .whitespacesAndNewlines)

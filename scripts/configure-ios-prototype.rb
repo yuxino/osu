@@ -17,6 +17,10 @@ wire = File.join(native, 'MimiWire.swift')
 File.write(wire, "enum MimiWire { static let key = \"#{SecureRandom.hex(32)}\" }\n") unless File.exist?(wire)
 group = project.main_group.find_subpath('MimiPrototype', true)
 group.set_source_tree('<group>'); group.set_path('MimiPrototype')
+character_name = 'mimi-maid-v1.png'
+FileUtils.cp(File.join(root, 'assets/brand', character_name), native)
+character_ref = group.files.find { |f| f.path == character_name } || group.new_file(character_name)
+host.resources_build_phase.add_file_reference(character_ref) unless host.resources_build_phase.files_references.include?(character_ref)
 extension = project.targets.find { |t| t.name == 'MimiBroadcast' } || project.new_target(:app_extension, 'MimiBroadcast', :ios, '18.0')
 files = Dir[File.join(native, '*.{swift,m}')]
 files.each do |file|

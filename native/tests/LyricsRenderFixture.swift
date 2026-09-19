@@ -16,7 +16,8 @@ import UIKit
       picture.showsOriginal = false
       picture.resetLyrics(original: "仅原文仍可阅读", translated: "", translationEnabled: false)
       let originalOnlyReadable = picture.preview.accessibilityValue == "仅原文仍可阅读"
-      var passed = hiddenByDefault && visibleWhenEnabled && originalOnlyReadable
+      let hasCharacter = Bundle.main.url(forResource: "mimi-maid-v1", withExtension: "png") != nil
+      var passed = hiddenByDefault && visibleWhenEnabled && originalOnlyReadable && hasCharacter
       let category = UIApplication.shared.preferredContentSizeCategory
       let name = category.isAccessibilityCategory ? "largest" : "regular"
       for (long, showsOriginal) in [(false, true), (true, true), (false, false), (true, false)] {
@@ -31,9 +32,10 @@ import UIKit
           LyricsPainter.draw(in: context.cgContext, bounds: CGRect(origin: .zero, size: LyricsPainter.size), previous: previous, current: current, original: original, progress: 1)
         }
         try? image.pngData()?.write(to: directory.appendingPathComponent(label + ".png"))
-        let prior = visiblePixels(image, in: CGRect(x: 48, y: 20, width: 864, height: 72))
-        let active = visiblePixels(image, in: CGRect(x: 48, y: 112, width: 864, height: 168))
-        let source = visiblePixels(image, in: showsOriginal ? CGRect(x: 48, y: 326, width: 864, height: 80) : CGRect(x: 48, y: 366, width: 864, height: 60))
+        let prior = visiblePixels(image, in: CGRect(x: 48, y: 20, width: 644, height: 76))
+        let active = visiblePixels(image, in: CGRect(x: 48, y: 120, width: 864, height: 178))
+        let source = visiblePixels(image, in: showsOriginal ? CGRect(x: 48, y: 334, width: 864, height: 80) : CGRect(x: 48, y: 398, width: 864, height: 28))
+        let character = visiblePixels(image, in: CGRect(x: 752, y: 28, width: 64, height: 64))
         var durations: [Double] = []
         for index in 0..<30 {
           let start = CACurrentMediaTime()
@@ -45,11 +47,24 @@ import UIKit
           durations.append((CACurrentMediaTime() - start) * 1000)
         }
         durations.sort()
-        let visible = prior > 100 && active > 100 && (showsOriginal ? source > 100 : source == 0)
+        let visible = prior > 100 && active > 100 && character > 100 && (showsOriginal ? source > 100 : source == 0)
         passed = passed && visible
-        rows.append(["case": label, "showsOriginal": showsOriginal, "previousPixels": prior, "currentPixels": active, "originalPixels": source, "scaledPreviousFont": UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: 34), maximumPointSize: 51).pointSize, "medianRenderMS": durations[15], "p95RenderMS": durations[28], "visible": visible])
+        rows.append(["case": label, "showsOriginal": showsOriginal, "previousPixels": prior, "currentPixels": active, "originalPixels": source, "characterPixels": character, "scaledPreviousFont": UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: 30), maximumPointSize: 45).pointSize, "medianRenderMS": durations[15], "p95RenderMS": durations[28], "visible": visible])
+        if !showsOriginal {
+          for progress: CGFloat in [0, 0.25, 0.5] {
+            let frame = renderer.image { context in
+              LyricsPainter.draw(in: context.cgContext, bounds: CGRect(origin: .zero, size: LyricsPainter.size), previous: previous, current: current, original: "", progress: progress)
+            }
+            try? frame.pngData()?.write(to: directory.appendingPathComponent(label + "-transition-\(Int(progress * 100)).png"))
+          }
+          let smallSize = CGSize(width: 240, height: 110)
+          let small = UIGraphicsImageRenderer(size: smallSize, format: format).image { context in
+            LyricsPainter.draw(in: context.cgContext, bounds: CGRect(origin: .zero, size: smallSize), previous: previous, current: current, original: "", progress: 1)
+          }
+          try? small.pngData()?.write(to: directory.appendingPathComponent(label + "-small.png"))
+        }
       }
-      let document: [String: Any] = ["cases": rows, "category": category.rawValue, "passed": passed, "hiddenByDefault": hiddenByDefault, "visibleWhenEnabled": visibleWhenEnabled, "originalOnlyReadable": originalOnlyReadable, "scope": "Fixed text, production CoreGraphics painter; simulator timings are not phone performance", "timestamp": ISO8601DateFormatter().string(from: Date())]
+      let document: [String: Any] = ["cases": rows, "category": category.rawValue, "passed": passed, "hasCharacter": hasCharacter, "hiddenByDefault": hiddenByDefault, "visibleWhenEnabled": visibleWhenEnabled, "originalOnlyReadable": originalOnlyReadable, "scope": "Fixed text, production CoreGraphics painter; simulator timings are not phone performance", "timestamp": ISO8601DateFormatter().string(from: Date())]
       try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys]).write(to: directory.appendingPathComponent("result.json"), options: .atomic)
       return (passed, "lyrics_visibility_at_current_text_size")
     } catch { return (false, "lyrics_layout_export_failed") }

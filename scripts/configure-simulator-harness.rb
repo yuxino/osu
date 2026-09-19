@@ -13,6 +13,7 @@ sources << File.join(root, 'native/tests/LyricsRenderFixture.swift')
 sources << File.join(root, 'native/tests/StreamEnduranceFixture.swift')
 sources << File.join(root, 'native/tests/MotionFixture.swift')
 sources.each { |f| t.source_build_phase.add_file_reference(g.new_file(f)) }
+t.resources_build_phase.add_file_reference(g.new_file(File.join(root, 'assets/brand/mimi-maid-v1.png')))
 t.build_configurations.each do |c|
  c.build_settings.merge!({'PRODUCT_NAME'=>'MimiSimulator','PRODUCT_BUNDLE_IDENTIFIER'=>'com.yuxino.osu.SimulatorTests','INFOPLIST_FILE'=>'Info.plist','GENERATE_INFOPLIST_FILE'=>'NO','SWIFT_VERSION'=>'5.0','IPHONEOS_DEPLOYMENT_TARGET'=>'18.0','TARGETED_DEVICE_FAMILY'=>'1,2','CODE_SIGNING_ALLOWED'=>'YES','CODE_SIGN_IDENTITY'=>'-'})
 end

@@ -30,7 +30,7 @@ import AVFoundation
         context.translateBy(x: 0, y: CGFloat(height)); context.scaleBy(x: 1, y: -1)
         UIGraphicsPushContext(context); defer { UIGraphicsPopContext() }
         let index = frame / 90, progress: CGFloat = index == 0 ? 1 : min(1, CGFloat(frame % 90) / 10.8)
-        LyricsPainter.draw(in: context, bounds: CGRect(origin: .zero, size: LyricsPainter.size), previous: index == 0 ? "" : lines[index - 1].1, current: lines[index].1, original: lines[index].0, progress: progress)
+        LyricsPainter.draw(in: context, bounds: CGRect(origin: .zero, size: LyricsPainter.size), previous: index == 0 ? "" : lines[index - 1].1, current: lines[index].1, original: "", progress: progress)
         guard adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(frame), timescale: 30)) else { throw writer.error ?? failure() }
       }
     }

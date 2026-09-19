@@ -13,6 +13,10 @@ Turn audio from other apps into a floating subtitle window. Inspired by [Mimi](h
 
 **Preview · iOS 18+ · Install from source.** No App Store or TestFlight release yet.
 
+<img src="docs/media/caption-style.png" width="640" alt="Osu captions with the character signature and a prominent translated line">
+
+*Caption style with illustrative text.*
+
 ## Features
 
 - **Lyrics-style captions** — cloud translations move up sentence by sentence, with the current line prominent and the previous line faded. Translations appear alone by default; enable the original text in settings.
