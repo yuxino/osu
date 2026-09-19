@@ -4,7 +4,9 @@ import Network
 
 @MainActor final class FixtureRealtimeSocket: RealtimeSocket {
   var sentAudio = 0
+  var sentBytes = 0
   var sentFinish = 0
+  var streamingLyrics = false
   private var messages: [Data] = []
   private var waiting: CheckedContinuation<Data, Error>?
   private(set) var closed = false
@@ -17,9 +19,26 @@ import Network
     if object["type"] as? String == "session.finish" { sentFinish += 1; if acknowledgeFinish { push(["type": "session.finished"]) } }
     if object["type"] as? String == "input_audio_buffer.append" {
       sentAudio += 1
-      push(["type": "conversation.item.input_audio_transcription.completed", "item_id": "test1", "transcript": "こんにちは"])
-      push(["type": "response.text.done", "response_id": "response1", "text": "你好"])
+      sentBytes += Data(base64Encoded: object["audio"] as? String ?? "")?.count ?? 0
+      if streamingLyrics { replyWithLyrics() }
+      else {
+        push(["type": "conversation.item.input_audio_transcription.completed", "item_id": "test1", "transcript": "こんにちは"])
+        push(["type": "response.text.done", "response_id": "response1", "text": "你好"])
+      }
     }
+  }
+  private func replyWithLyrics() {
+    guard sentAudio % 10 == 0 else { return }
+    let sentence = (sentAudio - 1) / 30, part = (sentAudio / 10 - 1) % 3, final = part == 2
+    let lines = [
+      ("窓の外は、少しずつ明るくなってきた。", "窗外，正一点一点亮起来。"),
+      ("Keep watching in the original video app. Subtitles appear as the next sentence arrives.", "继续在原来的 App 看视频，下一句说出口时，字幕就会跟着出现。"),
+      ("今日は、いつもと違う道を歩いてみよう。", "今天，走一条不一样的路吧。")
+    ]
+    let (source, target) = lines[sentence % lines.count], id = "stream-\(sentence)"
+    let sourceText = String(source.prefix(source.count * (part + 1) / 3)), targetText = String(target.prefix(target.count * (part + 1) / 3))
+    push(["type": final ? "conversation.item.input_audio_transcription.completed" : "conversation.item.input_audio_transcription.text", "item_id": id, final ? "transcript" : "text": sourceText])
+    push(["type": final ? "response.text.done" : "response.text.text", "response_id": id, "text": targetText])
   }
   private func push(_ object: [String: Any]) {
     let data = try! JSONSerialization.data(withJSONObject: object)
@@ -85,6 +104,7 @@ import Network
         try press("暂不开启", in: guide.view)
         try await Task.sleep(nanoseconds: 700_000_000)
         guard fixture.sockets.isEmpty, controller.presentedViewController == nil else { throw failure("permission_cancel_did_not_stay_local") }
+        guard subtitle(in: controller.view)?.contains("字幕会出现在这里") == true else { throw failure("cancel_left_waiting_subtitle") }
         try press("开始听", in: controller.view)
         try await Task.sleep(nanoseconds: 700_000_000)
         let connection = NWConnection(host: "127.0.0.1", port: 49371, using: .tcp); self.connection = connection
@@ -101,6 +121,7 @@ import Network
         try press("停止", in: controller.view)
         try await Task.sleep(nanoseconds: 700_000_000)
         guard fixture.sockets[0].closed, fixture.sockets[0].sentFinish == 1 else { throw failure("capture_stop_did_not_close_cloud") }
+        guard subtitle(in: controller.view)?.contains("你好") == true else { throw failure("stop_cleared_received_subtitle") }
         connection.cancel(); self.connection = nil
         completion(true, "wait_45s_resume_cancel_then_authenticated_audio_resume_and_finish")
       } catch {
@@ -116,6 +137,10 @@ import Network
     }
     guard let target = button(in: view) else { throw failure("capture_action_unavailable") }
     target.sendActions(for: .touchUpInside)
+  }
+  private func subtitle(in view: UIView) -> String? {
+    if view.accessibilityLabel == "字幕" { return view.accessibilityValue }
+    return view.subviews.lazy.compactMap { self.subtitle(in: $0) }.first
   }
   private func send(_ object: [String: Any], to connection: NWConnection) async throws {
     let data = try JSONSerialization.data(withJSONObject: object) + Data([10])

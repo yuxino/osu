@@ -13,7 +13,7 @@ enum LyricsPainter {
     let p = max(0, min(1, progress)), ease = 1 - pow(1 - p, 3)
     let hasPrevious = !previous.isEmpty
     if hasPrevious {
-      text(previous, rect: CGRect(x: 48, y: 112 - 82 * ease, width: 864, height: 156 - 108 * ease), fontSize: 60 - 26 * ease, weight: .medium, opacity: 1 - 0.64 * ease)
+      text(previous, rect: CGRect(x: 48, y: 112 - 88 * ease, width: 864, height: 168 - 96 * ease), fontSize: 60 - 26 * ease, weight: .medium, opacity: 1 - 0.64 * ease)
     }
     text(current, rect: CGRect(x: 48, y: 112 + (hasPrevious ? 68 * (1 - ease) : 0), width: 864, height: 168), fontSize: 60, weight: .semibold, opacity: hasPrevious ? ease : 1)
     if !original.isEmpty {
@@ -25,21 +25,43 @@ enum LyricsPainter {
     let paragraph = NSMutableParagraphStyle(); paragraph.alignment = .center; paragraph.lineBreakMode = .byWordWrapping; paragraph.lineSpacing = 8
     let font = UIFontMetrics.default.scaledFont(for: .systemFont(ofSize: fontSize, weight: weight), maximumPointSize: fontSize * 1.5)
     let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor(white: 1, alpha: opacity), .paragraphStyle: paragraph]
-    var visible = String(value.suffix(400)), clipped = value.count > 400
-    func trimWord() {
-      if let split = visible.firstIndex(where: { $0.isWhitespace }), visible.distance(from: visible.startIndex, to: split) < 32 {
-        visible = String(visible[visible.index(after: split)...]).trimmingCharacters(in: .whitespacesAndNewlines)
-      } else if !visible.isEmpty { visible.removeFirst() }
+    let visible = String(value.suffix(400)).trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !visible.isEmpty else { return }
+    func height(of candidate: String) -> CGFloat {
+      ceil((candidate as NSString).boundingRect(with: CGSize(width: rect.width, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attributes, context: nil).height)
     }
-    if clipped { trimWord() }
-    while !visible.isEmpty {
-      let candidate = clipped ? "… " + visible : visible
-      let height = (candidate as NSString).boundingRect(with: CGSize(width: rect.width, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attributes, context: nil).height
-      if ceil(height) <= floor(rect.height) {
-        (candidate as NSString).draw(with: CGRect(x: rect.minX, y: rect.midY - ceil(height) / 2, width: rect.width, height: ceil(height)), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attributes, context: nil)
-        return
+    func draw(_ candidate: String, height: CGFloat) {
+      (candidate as NSString).draw(with: CGRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attributes, context: nil)
+    }
+    if value.count <= 400 {
+      let measured = height(of: visible)
+      if measured <= floor(rect.height) { draw(visible, height: measured); return }
+    }
+
+    // Keep the readable tail, trimming whole short words or one grapheme at a
+    // time. Search the boundaries instead of shaping every discarded prefix
+    // again on each animation frame (particularly expensive for long CJK text).
+    var starts: [String.Index] = []
+    var start = visible.startIndex
+    while start < visible.endIndex {
+      let wordLimit = visible.index(start, offsetBy: 32, limitedBy: visible.endIndex) ?? visible.endIndex
+      if let split = visible[start..<wordLimit].firstIndex(where: { $0.isWhitespace }) {
+        start = visible.index(after: split)
+        while start < visible.endIndex, visible[start].isWhitespace { start = visible.index(after: start) }
+      } else {
+        start = visible.index(after: start)
       }
-      trimWord(); clipped = true
+      if start < visible.endIndex { starts.append(start) }
     }
+    var lower = 0, upper = starts.count
+    var fitted: (text: String, height: CGFloat)?
+    while lower < upper {
+      let middle = lower + (upper - lower) / 2
+      let candidate = "… " + visible[starts[middle]...]
+      let measured = height(of: candidate)
+      if measured <= floor(rect.height) { fitted = (candidate, measured); upper = middle }
+      else { lower = middle + 1 }
+    }
+    if let fitted { draw(fitted.text, height: fitted.height) }
   }
 }

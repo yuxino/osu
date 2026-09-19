@@ -30,6 +30,7 @@ final class MimiPrototypeController: UIViewController {
   private var engine: SubtitleEngine = .alibaba
   private let engineButton = UIButton(type: .system)
   private var keyButton: UIButton!
+  private var localRefreshButton: UIButton!
   private var cloud: AlibabaClient?
   private let makeCloudClient: () -> AlibabaClient
   private let readCloudCredential: () throws -> String?
@@ -150,7 +151,7 @@ final class MimiPrototypeController: UIViewController {
   }
   private func configureChoice(_ b: UIButton) {
     var c = UIButton.Configuration.gray(); c.baseForegroundColor = .label; c.baseBackgroundColor = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.15, alpha: 1) : UIColor(white: 0.96, alpha: 1) }
-    c.contentInsets = .init(top: 16, leading: 16, bottom: 16, trailing: 16); c.cornerStyle = .medium
+    c.contentInsets = .init(top: 16, leading: 16, bottom: 16, trailing: 16); c.cornerStyle = .medium; c.titleAlignment = .leading
     c.image = UIImage(systemName: "chevron.down"); c.imagePlacement = .trailing; c.imagePadding = 10; c.preferredSymbolConfigurationForImage = .init(pointSize: 11, weight: .semibold)
     b.configuration = c
     b.configurationUpdateHandler = { button in
@@ -167,9 +168,9 @@ final class MimiPrototypeController: UIViewController {
     let b = UIButton(type: .system); configureChoice(b); b.showsMenuAsPrimaryAction = false; b.configuration?.image = nil
     b.configuration?.title = title; b.addTarget(self, action: action, for: .touchUpInside); return b
   }
-  private func pageStack(in host: UIView, top: CGFloat = 20) -> UIStackView {
+  private func pageStack(in host: UIView, top: CGFloat = 20, below header: UIView? = nil) -> UIStackView {
     let scroll = UIScrollView(); scroll.translatesAutoresizingMaskIntoConstraints = false; host.addSubview(scroll)
-    NSLayoutConstraint.activate([scroll.topAnchor.constraint(equalTo: host.safeAreaLayoutGuide.topAnchor), scroll.bottomAnchor.constraint(equalTo: host.safeAreaLayoutGuide.bottomAnchor), scroll.leadingAnchor.constraint(equalTo: host.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: host.trailingAnchor)])
+    NSLayoutConstraint.activate([scroll.topAnchor.constraint(equalTo: header?.bottomAnchor ?? host.safeAreaLayoutGuide.topAnchor), scroll.bottomAnchor.constraint(equalTo: host.safeAreaLayoutGuide.bottomAnchor), scroll.leadingAnchor.constraint(equalTo: host.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: host.trailingAnchor)])
     let stack = UIStackView(); stack.axis = .vertical; stack.spacing = 22; stack.translatesAutoresizingMaskIntoConstraints = false; scroll.addSubview(stack)
     NSLayoutConstraint.activate([stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: top), stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -28), stack.leadingAnchor.constraint(equalTo: scroll.frameLayoutGuide.leadingAnchor, constant: 24), stack.trailingAnchor.constraint(equalTo: scroll.frameLayoutGuide.trailingAnchor, constant: -24)])
     return stack
@@ -185,7 +186,7 @@ final class MimiPrototypeController: UIViewController {
     settings.configuration?.contentInsets = .zero; settings.configuration?.preferredSymbolConfigurationForImage = .init(pointSize: 20, weight: .regular)
     settings.widthAnchor.constraint(equalToConstant: 48).isActive = true; header.addArrangedSubview(settings); stack.addArrangedSubview(header)
     let intro = label("听懂此刻。", size: 30, weight: .semibold); stack.addArrangedSubview(intro)
-    let subtitle = label("为正在播放的声音，添上你的语言。", size: 15); subtitle.textColor = .secondaryLabel; stack.addArrangedSubview(subtitle); stack.setCustomSpacing(28, after: subtitle)
+    let subtitle = label("开启后回到视频 App，字幕会在小窗里逐句出现。", size: 15); subtitle.textColor = .secondaryLabel; stack.addArrangedSubview(subtitle); stack.setCustomSpacing(28, after: subtitle)
     configureChoice(sourceButton); configureChoice(targetButton)
     languageRow.spacing = 10; languageRow.addArrangedSubview(sourceButton); languageRow.addArrangedSubview(targetButton)
     updateLanguageLayout(); stack.addArrangedSubview(languageRow)
@@ -200,12 +201,13 @@ final class MimiPrototypeController: UIViewController {
     serviceHint.numberOfLines = 0; serviceHint.font = UIFont.preferredFont(forTextStyle: .footnote); serviceHint.adjustsFontForContentSizeCategory = true; serviceHint.textColor = .secondaryLabel; stack.addArrangedSubview(serviceHint)
     configureChoice(engineButton)
     engineButton.menu = UIMenu(children: [UIAction(title: "Apple · 设备本地") { [weak self] _ in self?.chooseEngine(.apple) }, UIAction(title: "阿里云 · 实时同传") { [weak self] _ in self?.chooseEngine(.alibaba) }])
-    keyButton = button("管理阿里云密钥", #selector(configureCloudKey))
+    keyButton = button("阿里云密钥", #selector(configureCloudKey))
+    keyButton.configuration?.image = UIImage(systemName: "chevron.right")
+    localRefreshButton = button("重新检查本地语言", #selector(refreshPressed))
     languageStatus.numberOfLines = 0; languageStatus.font = UIFont.preferredFont(forTextStyle: .footnote); languageStatus.adjustsFontForContentSizeCategory = true; languageStatus.textColor = .secondaryLabel
     counts.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular); counts.numberOfLines = 0; counts.textColor = .secondaryLabel; counts.text = "尚未收到音频"
     sampleButton = button("测试日语同传", #selector(startSampleTest)); longSampleButton = button("连续测试 · 约一分钟", #selector(startLongSampleTest))
     cloudTestSection.axis = .vertical; cloudTestSection.spacing = 16
-    cloudTestSection.addArrangedSubview(label("检查服务", size: 18, weight: .semibold))
     cloudTestSection.addArrangedSubview(sampleButton); cloudTestSection.addArrangedSubview(longSampleButton)
     cloudTestSection.addArrangedSubview(label("测试会把固定的日语合成语音发给阿里云并产生少量用量，不使用麦克风。", size: 12))
     diagnosticFeedback.numberOfLines = 0; diagnosticFeedback.font = UIFont.preferredFont(forTextStyle: .footnote); diagnosticFeedback.adjustsFontForContentSizeCategory = true; diagnosticFeedback.textColor = .secondaryLabel; diagnosticFeedback.isHidden = true
@@ -231,22 +233,41 @@ final class MimiPrototypeController: UIViewController {
   }
   @objc private func openSettings() {
     let page = UIViewController(); page.view.backgroundColor = .systemBackground; settingsPage = page
-    let stack = pageStack(in: page.view, top: 28)
-    let heading = UIStackView(arrangedSubviews: [label("设置", size: 28, weight: .semibold), button("完成", #selector(closeSettings))]); heading.axis = .horizontal; heading.spacing = 24; stack.addArrangedSubview(heading)
+    let done = button("完成", #selector(closeSettings)); done.setContentHuggingPriority(.required, for: .horizontal); done.setContentCompressionResistancePriority(.required, for: .horizontal)
+    let title = label("设置", size: 28, weight: .semibold); title.accessibilityTraits.insert(.header)
+    let heading = UIStackView(arrangedSubviews: [title, done]); heading.axis = .horizontal; heading.spacing = 24; heading.alignment = .center; heading.translatesAutoresizingMaskIntoConstraints = false; page.view.addSubview(heading)
+    NSLayoutConstraint.activate([heading.topAnchor.constraint(equalTo: page.view.safeAreaLayoutGuide.topAnchor, constant: 24), heading.leadingAnchor.constraint(equalTo: page.view.leadingAnchor, constant: 24), heading.trailingAnchor.constraint(equalTo: page.view.trailingAnchor, constant: -24)])
+    let stack = pageStack(in: page.view, top: 28, below: heading)
     stack.addArrangedSubview(engineButton); stack.addArrangedSubview(keyButton); stack.addArrangedSubview(languageStatus)
-    stack.addArrangedSubview(button("重新检查本地语言", #selector(refreshPressed)))
-    stack.addArrangedSubview(label("使用方法", size: 18, weight: .semibold))
-    stack.addArrangedSubview(label("默认自动识别原文并翻译成中文。需要指定语言时，再点首页的语言选项。\n\n点「开始听」后按提示确认 Osu Audio 的系统广播。小窗出现后切回播放内容的网页或 App。关闭小窗也会停止收音。\n\nOsu 只处理 App 声音，丢弃视频和麦克风数据，不保存录音或字幕。部分受保护内容无法采集。广播时需关闭 iPhone 镜像。", size: 14))
-    stack.addArrangedSubview(cloudTestSection)
+    stack.addArrangedSubview(localRefreshButton)
+    let usage = label("默认自动识别声音并翻译成中文。想指定语言时，再点首页的语言选项。\n\n点「开始听」，按提示开启 Osu Audio 广播。字幕小窗出现后，回到原来的 App 继续播放。关闭字幕小窗也会停止收音。\n\n视频请留在原 App 内播放：iPhone 的视频小窗会替换字幕小窗。广播期间需关闭 iPhone 镜像。\n\nOsu 只处理 App 声音，丢弃视频和麦克风数据，不保存录音或字幕。部分受保护内容无法采集。", size: 14); usage.textColor = .secondaryLabel
+    addDisclosure("使用与隐私", content: usage, to: stack)
+    let diagnostics = UIStackView(); diagnostics.axis = .vertical; diagnostics.spacing = 16
+    diagnostics.addArrangedSubview(cloudTestSection)
     copyDiagnosticsButton.configuration?.title = "复制诊断"
-    stack.addArrangedSubview(counts); stack.addArrangedSubview(copyDiagnosticsButton); stack.addArrangedSubview(button("导出诊断", #selector(exportDiagnostics)))
-    diagnosticFeedback.text = nil; diagnosticFeedback.isHidden = true; stack.addArrangedSubview(diagnosticFeedback)
-    stack.addArrangedSubview(label("诊断只包含时间、阶段、错误代码和计数，不含音频、字幕或密钥。", size: 12))
+    diagnostics.addArrangedSubview(counts); diagnostics.addArrangedSubview(copyDiagnosticsButton); diagnostics.addArrangedSubview(button("导出诊断", #selector(exportDiagnostics)))
+    diagnosticFeedback.text = nil; diagnosticFeedback.isHidden = true; diagnostics.addArrangedSubview(diagnosticFeedback)
+    let privacy = label("诊断只包含时间、阶段、错误代码和计数，不含音频、字幕或密钥。", size: 12); privacy.textColor = .secondaryLabel; diagnostics.addArrangedSubview(privacy)
     #if targetEnvironment(simulator)
-    stack.addArrangedSubview(label("模拟器中的系统广播和语言资源不代表真机能力。", size: 12))
+    diagnostics.addArrangedSubview(label("模拟器中的系统广播和语言资源不代表真机能力。", size: 12))
     #endif
+    addDisclosure("检查与诊断", content: diagnostics, to: stack)
     page.modalPresentationStyle = .pageSheet; page.sheetPresentationController?.prefersGrabberVisible = true
     present(page, animated: true); updateControls()
+  }
+  private func addDisclosure(_ title: String, content: UIView, to stack: UIStackView) {
+    let divider = UIView(); divider.backgroundColor = .separator; divider.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale).isActive = true; stack.addArrangedSubview(divider)
+    let toggle = UIButton(type: .system)
+    var config = UIButton.Configuration.plain(); config.title = title; config.baseForegroundColor = .label; config.image = UIImage(systemName: "chevron.down"); config.imagePlacement = .trailing; config.imagePadding = 16; config.preferredSymbolConfigurationForImage = .init(pointSize: 12, weight: .semibold); config.contentInsets = .init(top: 12, leading: 0, bottom: 12, trailing: 0)
+    toggle.configuration = config; toggle.contentHorizontalAlignment = .fill; toggle.accessibilityValue = "已收起"
+    toggle.heightAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+    content.isHidden = true
+    toggle.addAction(UIAction { [weak toggle, weak content] _ in
+      guard let toggle, let content else { return }
+      content.isHidden.toggle(); toggle.configuration?.image = UIImage(systemName: content.isHidden ? "chevron.down" : "chevron.up"); toggle.accessibilityValue = content.isHidden ? "已收起" : "已展开"
+      UIAccessibility.post(notification: .layoutChanged, argument: toggle)
+    }, for: .touchUpInside)
+    stack.addArrangedSubview(toggle); stack.addArrangedSubview(content); stack.setCustomSpacing(8, after: divider)
   }
   @objc private func closeSettings() { settingsPage?.dismiss(animated: true) }
   private func dismissSettingsThen(_ work: @escaping () -> Void) { if let page = settingsPage, page.presentingViewController != nil { page.dismiss(animated: true, completion: work) } else { work() } }
@@ -261,7 +282,7 @@ final class MimiPrototypeController: UIViewController {
   }
   @objc private func configureCloudKey() {
     guard !running && !startPending else { return }
-    let alert = UIAlertController(title: "阿里云百炼 · 北京", message: "输入你的 API Key，仅保存到这台设备的系统钥匙串。开始云端会话后音频会上传并按阿里云规则计费。不会自动读取桌面 Mimi 的密钥。", preferredStyle: .alert)
+    let alert = UIAlertController(title: "阿里云百炼 · 北京", message: "输入你的 API Key，仅保存到这台设备的系统钥匙串。开始云端会话后，音频会上传到阿里云并由你的账户计费。", preferredStyle: .alert)
     alert.addTextField { field in field.placeholder = "API Key"; field.isSecureTextEntry = true; field.autocorrectionType = .no; field.autocapitalizationType = .none }
     alert.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in alert.textFields?.first?.text = "" })
     alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self] _ in
@@ -367,6 +388,7 @@ final class MimiPrototypeController: UIViewController {
   private func updateControls() {
     let busy = running || startPending || downloading
     cloudTestSection.isHidden = engine != .alibaba
+    localRefreshButton.isHidden = engine != .apple; localRefreshButton.isEnabled = !busy
     sampleButton.isEnabled = !busy && ["auto", "ja"].contains(selection.source) && AlibabaProtocol.valid(source: selection.source, target: selection.target)
     sampleButton.configuration?.title = selection.source == "auto" ? "测试自动识别" : "测试日语同传"
     longSampleButton.isEnabled = sampleButton.isEnabled
@@ -389,9 +411,10 @@ final class MimiPrototypeController: UIViewController {
 
     if engine == .alibaba {
       let credential: String
-      do { credential = try readCloudCredential() != nil ? "密钥已保存。" : "请先配置北京地域百炼 API Key。" }
-      catch { credential = "系统钥匙串暂不可用。" }
-      languageStatus.text = "沿用 Mimi 的低延迟同传服务；无需下载 Apple 语言包。\n开始后 App 音频将通过加密连接上传到阿里云（北京），由你的阿里云账户计费。\n" + credential + (pairState.canStart ? "" : "\n请选择不同的声音和字幕语言。")
+      do { credential = try readCloudCredential() != nil ? "已配置" : "开始前添加北京地域 API Key" }
+      catch { credential = "系统钥匙串暂不可用" }
+      keyButton.configuration?.subtitle = credential
+      languageStatus.text = "音频通过加密连接发送到阿里云（北京），由你的阿里云账户计费。" + (pairState.canStart ? "" : "\n请选择不同的声音和字幕语言。")
       return
     }
     languageStatus.text = (localSources.contains(selection.source) ? "已检测到此语言的本地识别能力。\n" : "所选语言的本地识别当前不可用。可换语言或稍后重新检查；识别资源由系统提供，应用内无法直接下载，也不会改用云端识别。\n") + pairState.message
@@ -741,6 +764,9 @@ final class MimiPrototypeController: UIViewController {
     translationWork?.cancel(); translationWork = nil; translationBusy = false
     if #available(iOS 26.0, *) { translator?.cancel() }; translator = nil
     picture.stop()
+    if receivedFrames == 0 && recognitionUpdates == 0 && translationUpdates == 0 {
+      picture.resetLyrics(original: "播放一段你想听懂的内容", translated: "字幕会出现在这里")
+    }
     if mediaActive { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation); mediaActive = false }
     log.record("session", reason, metrics: metrics); writeSnapshot(); updateControls(); updateCounts()
     setStatus(reason == "pip_closed" ? pictureStoppedMessage : "已停止。准备好了就再开始。")

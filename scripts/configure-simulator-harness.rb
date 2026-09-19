@@ -9,6 +9,8 @@ g = p.main_group.new_group('Sources')
 sources = Dir[File.join(root, 'native/ios/*.swift')].reject { |f| ['SampleHandler.swift', 'MimiPrototype.swift'].include?(File.basename(f)) }
 sources += [File.join(root, 'native/tests/CloudFixture.swift'), File.join(root, 'native/tests/SimulatorHarness.swift'), File.join(root, 'native/tests/LyricsClipExporter.swift'), File.join(root, 'ios/MimiPrototype/MimiWire.swift')]
 sources << File.join(root, 'native/tests/SessionFinishFixture.swift')
+sources << File.join(root, 'native/tests/LyricsRenderFixture.swift')
+sources << File.join(root, 'native/tests/StreamEnduranceFixture.swift')
 sources.each { |f| t.source_build_phase.add_file_reference(g.new_file(f)) }
 t.build_configurations.each do |c|
  c.build_settings.merge!({'PRODUCT_NAME'=>'MimiSimulator','PRODUCT_BUNDLE_IDENTIFIER'=>'com.yuxino.osu.SimulatorTests','INFOPLIST_FILE'=>'Info.plist','GENERATE_INFOPLIST_FILE'=>'NO','SWIFT_VERSION'=>'5.0','IPHONEOS_DEPLOYMENT_TARGET'=>'18.0','TARGETED_DEVICE_FAMILY'=>'1,2','CODE_SIGNING_ALLOWED'=>'YES','CODE_SIGN_IDENTITY'=>'-'})
