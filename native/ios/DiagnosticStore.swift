@@ -10,7 +10,7 @@ final class DiagnosticStore {
   private(set) var sessionID = UUID().uuidString
   private var sequence = 0
   private var storageFailed = false
-  private let numericKeys: Set<String> = ["audioFrames", "audioSeconds", "recognitionUpdates", "translationUpdates", "peak", "elapsed", "dropped", "conversionFailures", "translationMS", "audioGapSeconds", "recognitionRestarts", "code", "permission", "pip", "running", "foreground", "receivedBytes"]
+  private let numericKeys: Set<String> = ["cloudBytes", "audioFrames", "audioSeconds", "recognitionUpdates", "translationUpdates", "peak", "elapsed", "dropped", "conversionFailures", "translationMS", "audioGapSeconds", "recognitionRestarts", "code", "permission", "pip", "running", "foreground", "receivedBytes"]
   private let domains: Set<String> = ["kAFAssistantErrorDomain", "SFSpeechErrorDomain", "NSURLErrorDomain", "NSPOSIXErrorDomain", "NSCocoaErrorDomain", "AVFoundationErrorDomain", "Translation.TranslationError", "MimiPrototype"]
 
   init(directory: URL? = nil, maxBytes: Int = 131072, fileCount: Int = 6) {

@@ -27,6 +27,17 @@ private struct LanguageDownloadView: View {
 }
 
 final class MimiPrototypeController: UIViewController {
+  private var engine = SubtitleEngine(rawValue: UserDefaults.standard.string(forKey: "mimi.engine") ?? "apple") ?? .apple
+  private let engineButton = UIButton(type: .system)
+  private var keyButton: UIButton!
+  private var cloud: AlibabaClient?
+  private var cloudBytes = 0
+  private var sampleButton: UIButton!
+  private let sampleTest = CloudSampleTest()
+  private var sampleData = Data()
+  private var sampleOffset = 0
+  private var sampleTimer: Timer?
+  private var testingSample = false
   private let picture = SubtitlePicture()
   private let receiver = AudioReceiver()
   private let log = DiagnosticStore.shared
@@ -59,6 +70,7 @@ final class MimiPrototypeController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    if engine == .alibaba { selection = .init(source: UserDefaults.standard.string(forKey: "mimi.alibaba.source") ?? "ja", target: UserDefaults.standard.string(forKey: "mimi.alibaba.target") ?? "zh") }
     if log.previousWasRunning() { log.record("session", "previous_interrupted_unknown_cause") }
     log.record("app", "opened")
     log.snapshot(running: false, pip: false, metrics: [:])
@@ -68,7 +80,11 @@ final class MimiPrototypeController: UIViewController {
     let stack = UIStackView(); stack.axis = .vertical; stack.spacing = 16; stack.translatesAutoresizingMaskIntoConstraints = false; scroll.addSubview(stack)
     NSLayoutConstraint.activate([stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 24), stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -28), stack.leadingAnchor.constraint(equalTo: scroll.frameLayoutGuide.leadingAnchor, constant: 24), stack.trailingAnchor.constraint(equalTo: scroll.frameLayoutGuide.trailingAnchor, constant: -24)])
     let title = UILabel(); title.text = "Mimi / iPhone"; title.font = .systemFont(ofSize: 32, weight: .bold); stack.addArrangedSubview(title)
-    let subtitle = label("听懂其他 App 的声音\n设备本地识别 · 自选字幕语言", size: 14); subtitle.textColor = .secondaryLabel; stack.addArrangedSubview(subtitle)
+    let subtitle = label("听懂其他 App 的声音\n自选识别服务 · 自选字幕语言", size: 14); subtitle.textColor = .secondaryLabel; stack.addArrangedSubview(subtitle)
+    configureChoice(engineButton)
+    engineButton.menu = UIMenu(children: [UIAction(title: "Apple · 设备本地") { [weak self] _ in self?.chooseEngine(.apple) }, UIAction(title: "阿里云 · Mimi 实时同传") { [weak self] _ in self?.chooseEngine(.alibaba) }])
+    stack.addArrangedSubview(engineButton)
+    keyButton = button("配置阿里云密钥", #selector(configureCloudKey)); stack.addArrangedSubview(keyButton)
     configureChoice(sourceButton); configureChoice(targetButton)
     #if targetEnvironment(simulator)
     stack.addArrangedSubview(label("模拟器用于界面和本地连接测试；语言资源与屏幕广播能力不代表真机。", size: 12))
@@ -84,9 +100,10 @@ final class MimiPrototypeController: UIViewController {
     let broadcastRow = UIStackView(); broadcastRow.axis = .horizontal; broadcastRow.spacing = 12
     broadcastRow.addArrangedSubview(label("3 · 开始屏幕广播 →", size: 16))
     let picker = RPSystemBroadcastPickerView(frame: CGRect(x: 0, y: 0, width: 50, height: 50)); picker.preferredExtension = "com.yuxino.osu.MimiBroadcast"; picker.showsMicrophoneButton = false; picker.widthAnchor.constraint(equalToConstant: 50).isActive = true; picker.heightAnchor.constraint(equalToConstant: 50).isActive = true; broadcastRow.addArrangedSubview(picker); stack.addArrangedSubview(broadcastRow)
-    stack.addArrangedSubview(label("系统会询问是否广播屏幕。仅处理 App 声音，丢弃视频和麦克风；不保存音频或字幕。受保护内容可能无法采集。使用时请关闭 iPhone 镜像。", size: 12))
+    stack.addArrangedSubview(label("系统会询问是否广播屏幕。仅处理 App 声音，丢弃视频和麦克风；不在本机保存音频或字幕。选择阿里云时音频会上传到百炼服务。受保护内容可能无法采集。使用时请关闭 iPhone 镜像。", size: 12))
     transcript.text = "原文等待中"; transcript.numberOfLines = 4; transcript.font = .systemFont(ofSize: 15); stack.addArrangedSubview(transcript)
     translation.text = "译文等待中"; translation.numberOfLines = 4; translation.font = .systemFont(ofSize: 19, weight: .semibold); stack.addArrangedSubview(translation)
+    sampleButton = button("云端日语测试 · 上传合成语音", #selector(startSampleTest)); stack.addArrangedSubview(sampleButton)
     stack.addArrangedSubview(button("停止采集与字幕", #selector(stopPressed)))
     stack.addArrangedSubview(button("复制诊断日志", #selector(copyDiagnostics)))
     stack.addArrangedSubview(button("导出诊断日志", #selector(exportDiagnostics)))
@@ -116,25 +133,141 @@ final class MimiPrototypeController: UIViewController {
   private func button(_ title: String, _ action: Selector) -> UIButton {
     let b = UIButton(type: .system); configureChoice(b); b.showsMenuAsPrimaryAction = false; b.configuration?.title = title; b.addTarget(self, action: action, for: .touchUpInside); return b
   }
+  private func chooseEngine(_ value: SubtitleEngine) {
+    guard !running && !startPending && !downloading else { return }
+    engine = value; UserDefaults.standard.set(value.rawValue, forKey: "mimi.engine")
+    let prefix = value == .alibaba ? "mimi.alibaba." : "mimi."
+    selection = .init(source: UserDefaults.standard.string(forKey: prefix + "source") ?? (value == .alibaba ? "ja" : "en-US"), target: UserDefaults.standard.string(forKey: prefix + "target") ?? (value == .alibaba ? "zh" : "zh-Hans"))
+    translator = nil; refreshLanguages()
+  }
+  @objc private func configureCloudKey() {
+    guard !running && !startPending else { return }
+    let alert = UIAlertController(title: "阿里云百炼 · 北京", message: "输入你的 API Key，仅保存到这台设备的系统钥匙串。开始云端会话后音频会上传并按阿里云规则计费。不会自动读取桌面 Mimi 的密钥。", preferredStyle: .alert)
+    alert.addTextField { field in field.placeholder = "API Key"; field.isSecureTextEntry = true; field.autocorrectionType = .no; field.autocapitalizationType = .none }
+    alert.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in alert.textFields?.first?.text = "" })
+    alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self] _ in
+      defer { alert.textFields?.first?.text = "" }
+      do { try CloudCredentialStore.save(alert.textFields?.first?.text ?? ""); self?.setStatus("密钥已安全保存。"); self?.log.record("credential", "saved") }
+      catch { self?.setStatus("密钥未保存，请检查输入或系统钥匙串。") }
+      self?.updateControls()
+    })
+    alert.addAction(UIAlertAction(title: "移除已保存密钥", style: .destructive) { [weak self] _ in
+      alert.textFields?.first?.text = ""
+      do { try CloudCredentialStore.remove(); self?.setStatus("已移除密钥。"); self?.log.record("credential", "removed") }
+      catch { self?.setStatus("无法移除密钥，请稍后重试。") }; self?.updateControls()
+    })
+    present(alert, animated: true)
+  }
+  @objc private func startSampleTest() {
+    guard !running && !startPending && engine == .alibaba && selection.source == "ja" else { return }
+    testingSample = true; startCloud()
+  }
+  private func beginSample() {
+    let epoch = generation
+    log.record("cloud", "synthetic_sample_preparing"); setStatus("正在准备固定日语合成语音；此测试不采集浏览器或麦克风。")
+    sampleTest.prepare { [weak self] data in
+      guard let self, self.running, self.generation == epoch else { return }
+      guard let data else { self.stopSession(reason: "sample_unavailable"); self.setStatus("无法生成日语测试语音；可用真机广播或稍后重试。"); return }
+      self.sampleData = data; self.sampleOffset = 0
+      self.log.record("cloud", "synthetic_sample_uploading")
+      self.sampleTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        Task { @MainActor [weak self] in
+        guard let self, self.running, self.generation == epoch else { return }
+        guard self.sampleOffset < self.sampleData.count else {
+          self.sampleTimer?.invalidate(); self.sampleTimer = nil; self.sampleData.removeAll()
+          self.log.record("cloud", "synthetic_sample_sent")
+          DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
+            guard let self, self.running, self.generation == epoch else { return }
+            let ok = self.recognitionUpdates > 0 && self.translationUpdates > 0
+            self.log.record("cloud", ok ? "synthetic_sample_passed" : "synthetic_sample_no_results", metrics: self.metrics)
+            self.stopSession(reason: "sample_complete"); self.setStatus(ok ? "合成日语已收到阿里云识别和翻译结果。跨 App 收音仍需另外测试。" : "测试未收到完整识别与翻译结果，请查看诊断。")
+          }
+          return
+        }
+        let end = min(self.sampleOffset + 3200, self.sampleData.count)
+        let chunk = self.sampleData.subdata(in: self.sampleOffset..<end); self.sampleOffset = end
+        self.cloud?.append(chunk); self.receivedFrames += 1; self.seconds += Double(chunk.count) / 32000; self.lastAudio = Date()
+        }
+      }
+    }
+  }
+  private func startCloud() {
+    do {
+      guard let key = try CloudCredentialStore.read() else { testingSample = false; setStatus("请先配置阿里云百炼 API Key。"); return }
+      log.begin(source: selection.source, target: selection.target); log.record("cloud", "connecting"); log.snapshot(running: false, pip: false, metrics: [:])
+      startPending = true; generation += 1; updateControls(); setStatus("正在连接阿里云，连接成功后再开启屏幕广播。")
+      let client = AlibabaClient(); cloud = client
+      client.onReady = { [weak self, weak client] in
+        guard let self, let client, self.cloud === client, self.startPending else { return }
+        self.log.record("cloud", "ready"); self.startSession()
+      }
+      client.onSource = { [weak self, weak client] text, final in
+        guard let self, let client, self.cloud === client, self.running else { return }
+        self.recognitionUpdates += 1; self.transcript.text = text; self.picture.original = text
+        if self.recognitionUpdates == 1 { self.log.record("cloud", "first_source") }
+        if final { self.log.record("cloud", "source_final") }
+      }
+      client.onTranslation = { [weak self, weak client] text, final in
+        guard let self, let client, self.cloud === client, self.running else { return }
+        self.translationUpdates += 1; self.translation.text = text; self.picture.translated = text
+        if self.translationUpdates == 1 { self.log.record("cloud", "first_translation") }
+        if final { self.log.record("cloud", "translation_final") }
+      }
+      client.onMetric = { [weak self, weak client] bytes in guard let self, let client, self.cloud === client else { return }; self.cloudBytes += bytes }
+      client.onFailure = { [weak self, weak client] failure in
+        guard let self, let client, self.cloud === client else { return }
+        self.log.record("cloud", "failed", metrics: ["code": Double(failure.rawValue)])
+        self.stopSession(reason: "cloud_failed")
+        self.setStatus(failure == .authentication ? "阿里云鉴权失败，请检查北京地域 API Key。" : failure == .quota ? "阿里云额度不足或请求受限，请检查账户。" : "阿里云会话已停止，请检查网络、密钥地域与服务权限。错误代码已写入诊断，可手动重试。")
+      }
+      try client.start(key: key, source: selection.source, target: selection.target)
+    } catch {
+      cloud?.stop(); cloud = nil; testingSample = false; startPending = false; updateControls(); setStatus("无法启动阿里云，请检查密钥和语言配置。"); log.record("cloud", "start_failed")
+    }
+  }
   private func updateControls() {
     let busy = running || startPending || downloading
+    sampleButton.isHidden = engine != .alibaba
+    sampleButton.isEnabled = !busy && selection.source == "ja" && AlibabaProtocol.valid(source: selection.source, target: selection.target)
+    engineButton.isEnabled = !busy; keyButton.isEnabled = !busy; keyButton.isHidden = engine != .alibaba
+    engineButton.configuration?.title = engine == .apple ? "服务 · Apple 设备本地" : "服务 · 阿里云实时同传"
     sourceButton.isEnabled = !busy; targetButton.isEnabled = !busy
-    sourceButton.configuration?.title = "声音语言 · \(LanguageSelection.display(selection.source))"
+    sourceButton.configuration?.title = "声音语言 · \((selection.source == "auto" ? "自动识别" : LanguageSelection.display(selection.source)))"
     targetButton.configuration?.title = "字幕语言 · \(selection.target.isEmpty ? "仅显示原文" : LanguageSelection.display(selection.target))"
+    prepareButton.isHidden = engine == .alibaba
     prepareButton.isEnabled = !busy && (pairState == .needsDownload || pairState == .installed)
     startButton.isEnabled = running || (!busy && pairState.canStart && localSources.contains(selection.source))
+    if engine == .alibaba {
+      let credential: String
+      do { credential = try CloudCredentialStore.isPresent() ? "密钥已保存。" : "请先配置北京地域百炼 API Key。" }
+      catch { credential = "系统钥匙串暂不可用。" }
+      languageStatus.text = "沿用 Mimi 的低延迟同传服务；无需下载 Apple 语言包。\n开始后 App 音频将通过加密连接上传到阿里云（北京），由你的阿里云账户计费。\n" + credential + (pairState.canStart ? "" : "\n请选择不同的声音和字幕语言。")
+      return
+    }
     languageStatus.text = (localSources.contains(selection.source) ? "已检测到此语言的本地识别能力。\n" : "所选语言的本地识别当前不可用。可换语言或稍后重新检查；识别资源由系统提供，应用内无法直接下载，也不会改用云端识别。\n") + pairState.message
   }
   @objc private func refreshPressed() { guard !running && !startPending && !downloading else { return }; refreshLanguages() }
   private func choose(_ value: LanguageSelection) {
     guard !running && !startPending && !downloading else { return }
     selection = value; translator = nil
-    UserDefaults.standard.set(value.source, forKey: "mimi.source"); UserDefaults.standard.set(value.target, forKey: "mimi.target")
+    let prefix = engine == .alibaba ? "mimi.alibaba." : "mimi."
+    UserDefaults.standard.set(value.source, forKey: prefix + "source"); UserDefaults.standard.set(value.target, forKey: prefix + "target")
     refreshLanguages()
   }
   private func refreshLanguages() {
     catalogRevision += 1; let revision = catalogRevision; let captured = selection
     catalogTask?.cancel(); pairState = .checking
+    if engine == .alibaba {
+      localSources = Set(AlibabaProtocol.sources)
+      sourceButton.menu = UIMenu(children: AlibabaProtocol.sources.map { id in
+        UIAction(title: id == "auto" ? "自动识别" : LanguageSelection.display(id), state: id == selection.source ? .on : .off) { [weak self] _ in guard let self else { return }; self.choose(.init(source: id, target: self.selection.target)) }
+      })
+      targetButton.menu = UIMenu(children: AlibabaProtocol.targets.map { id in
+        UIAction(title: id == "zh" ? "简体中文" : LanguageSelection.display(id), state: id == selection.target ? .on : .off) { [weak self] _ in guard let self else { return }; self.choose(.init(source: self.selection.source, target: id)) }
+      })
+      pairState = AlibabaProtocol.valid(source: selection.source, target: selection.target) ? .installed : .unsupported
+      updateControls(); log.record("language", "alibaba_selected", source: selection.source, target: selection.target); return
+    }
     let locales = SFSpeechRecognizer.supportedLocales().sorted { LanguageSelection.display($0.identifier) < LanguageSelection.display($1.identifier) }
     localSources = Set(locales.filter { SFSpeechRecognizer(locale: $0)?.supportsOnDeviceRecognition == true }.map(\.identifier))
     sourceButton.menu = UIMenu(children: locales.map { locale in
@@ -190,6 +323,7 @@ final class MimiPrototypeController: UIViewController {
   @objc private func startPressed() {
     if running { picture.start(); return }
     guard !startPending && !downloading && pairState.canStart else { return }
+    if engine == .alibaba { startCloud(); return }
     startPending = true; generation += 1; let epoch = generation; updateControls()
     log.begin(source: selection.source, target: selection.target.isEmpty ? "none" : selection.target)
     log.snapshot(running: false, pip: false, metrics: [:])
@@ -225,23 +359,26 @@ final class MimiPrototypeController: UIViewController {
   }
   private func startSession() {
     startPending = false
+    if engine == .apple {
     guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: selection.source)), recognizer.supportsOnDeviceRecognition, recognizer.isAvailable else {
       log.record("speech", "local_unavailable"); setStatus("所选语言的本地识别暂不可用，请换语言或稍后重新检查。"); updateControls(); return
     }
+    self.recognizer = recognizer
     translator = nil
     if !selection.target.isEmpty {
       guard #available(iOS 26.0, *), pairState == .installed else { updateControls(); return }
       translator = TranslationSession(installedSource: selection.sourceLanguage, target: selection.targetLanguage)
     }
+    }
     generation += 1; bindReceiver()
     do {
-      try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers]); try AVAudioSession.sharedInstance().setActive(true); try receiver.start()
-    } catch { log.record("audio", "start_failed", error: error); receiver.stop(); try? AVAudioSession.sharedInstance().setActive(false); updateControls(); setStatus("无法启动收音，错误已写入诊断。"); return }
-    self.recognizer = recognizer; running = true; receivedFrames = 0; seconds = 0; peak = 0; recognitionUpdates = 0; translationUpdates = 0; recognitionRestarts = 0; translationMS = 0; newest = ""; lastTranslated = ""; translationBusy = false; audioMissing = false; sessionStarted = Date(); lastAudio = .distantPast; lastJournal = .distantPast
+      try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers]); try AVAudioSession.sharedInstance().setActive(true); if !testingSample { try receiver.start() }
+    } catch { log.record("audio", "start_failed", error: error); receiver.stop(); cloud?.stop(); cloud = nil; testingSample = false; try? AVAudioSession.sharedInstance().setActive(false); updateControls(); setStatus("无法启动收音，错误已写入诊断。"); return }
+    running = true; cloudBytes = 0; receivedFrames = 0; seconds = 0; peak = 0; recognitionUpdates = 0; translationUpdates = 0; recognitionRestarts = 0; translationMS = 0; newest = ""; lastTranslated = ""; translationBusy = false; audioMissing = false; sessionStarted = Date(); lastAudio = .distantPast; lastJournal = .distantPast
     transcript.text = "原文等待中"; translation.text = selection.target.isEmpty ? "仅显示原文" : "译文等待中"; picture.original = "等待其他 App 的声音"; picture.translated = selection.target.isEmpty ? "仅显示原文" : "等待翻译"
-    startRecognition(); updateControls()
+    if engine == .apple { startRecognition() }; updateControls()
     heartbeat = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
-    setStatus("正在启动接收器…"); log.record("session", "running"); picture.prime(); picture.start(); writeSnapshot()
+    setStatus("正在启动接收器…"); log.record("session", "running"); picture.prime(); if !testingSample { picture.start() }; writeSnapshot(); if testingSample { beginSample() }
   }
   private func startRecognition() {
     recognitionGeneration += 1; let epoch = recognitionGeneration
@@ -271,10 +408,11 @@ final class MimiPrototypeController: UIViewController {
     if receivedFrames == 0 || audioMissing { log.record("audio", receivedFrames == 0 ? "first_frame" : "resumed"); setStatus("正在接收 App 声音并生成字幕。"); audioMissing = false }
     receivedFrames += 1; seconds += Double(pcm.frameLength) / 16000; lastAudio = Date()
     if let channel = pcm.int16ChannelData?[0] { peak = (0..<Int(pcm.frameLength)).reduce(0.0) { max($0, abs(Double(channel[$1])) / 32768) } }
-    request?.append(pcm)
+    if engine == .alibaba, let samples = pcm.int16ChannelData?[0] { cloud?.append(Data(bytes: samples, count: Int(pcm.frameLength) * 2)) }
+    else { request?.append(pcm) }
   }
   private var metrics: [String: Double] {
-    ["audioFrames": Double(receivedFrames), "audioSeconds": seconds, "recognitionUpdates": Double(recognitionUpdates), "translationUpdates": Double(translationUpdates), "peak": peak, "elapsed": Date().timeIntervalSince(sessionStarted), "translationMS": translationMS, "recognitionRestarts": Double(recognitionRestarts), "audioGapSeconds": receivedFrames == 0 ? Date().timeIntervalSince(sessionStarted) : Date().timeIntervalSince(lastAudio)]
+    ["cloudBytes": Double(cloudBytes), "audioFrames": Double(receivedFrames), "audioSeconds": seconds, "recognitionUpdates": Double(recognitionUpdates), "translationUpdates": Double(translationUpdates), "peak": peak, "elapsed": Date().timeIntervalSince(sessionStarted), "translationMS": translationMS, "recognitionRestarts": Double(recognitionRestarts), "audioGapSeconds": receivedFrames == 0 ? Date().timeIntervalSince(sessionStarted) : Date().timeIntervalSince(lastAudio)]
   }
   private func writeSnapshot() { log.snapshot(running: running, pip: running && picture.active, metrics: metrics) }
   private func tick() {
@@ -283,8 +421,8 @@ final class MimiPrototypeController: UIViewController {
     if Date().timeIntervalSince(lastAudio) > 5 && !audioMissing {
       audioMissing = true; log.record("audio", "waiting_or_gap", metrics: metrics); setStatus("等待音频：请检查广播和播放状态；受保护内容可能无法采集。")
     }
-    if Date().timeIntervalSince(lastRotation) > 45 { startRecognition() }
-    if !newest.isEmpty, newest != lastTranslated, !translationBusy, let translator {
+    if engine == .apple && Date().timeIntervalSince(lastRotation) > 45 { startRecognition() }
+    if engine == .apple, !newest.isEmpty, newest != lastTranslated, !translationBusy, let translator {
       let input = newest; let epoch = generation; translationBusy = true; let began = Date()
       translationWork = Task { [weak self] in
         do {
@@ -312,8 +450,10 @@ final class MimiPrototypeController: UIViewController {
   }
   @objc private func stopPressed() { stopSession(reason: "user_stopped") }
   private func stopSession(reason: String) {
-    generation += 1; startPending = false
-    guard running else { picture.stop(); updateControls(); return }
+    let wasPending = startPending
+    testingSample = false; sampleTest.cancel(); sampleTimer?.invalidate(); sampleTimer = nil; sampleData.removeAll()
+    generation += 1; startPending = false; cloud?.stop(); cloud = nil
+    guard running else { if wasPending { log.record("session", reason); log.snapshot(running: false, pip: false, metrics: [:]) }; picture.stop(); updateControls(); return }
     running = false; recognitionGeneration += 1
     heartbeat?.invalidate(); heartbeat = nil; receiver.stop(); request?.endAudio(); request = nil; recognition?.cancel(); recognition = nil
     translationWork?.cancel(); translationWork = nil; translationBusy = false

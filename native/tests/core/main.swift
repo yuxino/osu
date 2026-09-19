@@ -48,3 +48,25 @@ for bad in [try packet(["key": "wrong", "audio": "AAE="]), try packet(["key": "t
 print("All native core checks passed.")
 
 check(LanguageSelection.identifier(Locale.Language(identifier: "zh-CN")) == "zh-Hans", "system Chinese locale matches the saved simplified target")
+
+let setup = try JSONSerialization.jsonObject(with: Data(AlibabaProtocol.setup(source: "ja", target: "zh").utf8)) as! [String: Any]
+let sessionConfig = setup["session"] as! [String: Any]
+check(sessionConfig["sample_rate"] as? Int == 16000 && sessionConfig["modalities"] as? [String] == ["text"], "Mimi cloud session requests 16k text-only output")
+check((sessionConfig["input_audio_transcription"] as? [String: Any])?["language"] as? String == "ja", "Japanese cloud source hint matches Mimi")
+let auto = try JSONSerialization.jsonObject(with: Data(AlibabaProtocol.setup(source: "auto", target: "zh").utf8)) as! [String: Any]
+check(((auto["session"] as? [String: Any])?["input_audio_transcription"] as? [String: Any])?["language"] == nil, "automatic recognition omits language hint")
+check(!AlibabaProtocol.valid(source: "ja", target: "ja") && !AlibabaProtocol.valid(source: "unsupported", target: "zh"), "invalid cloud selections rejected")
+let draft = try AlibabaProtocol.decode(Data("{\"type\":\"conversation.item.input_audio_transcription.text\",\"item_id\":\"one\",\"text\":\"今日\",\"stash\":\"は\"}".utf8))
+check(draft == .source("今日は", "one", false), "cloud drafts replace confirmed text plus stash")
+check(try AlibabaProtocol.decode(Data("{\"type\":\"error\",\"error\":{\"code\":\"SECRET_KEY\",\"message\":\"SECRET_TRANSCRIPT\"}}".utf8)) == .failure(.service), "cloud error messages and arbitrary codes are discarded")
+var audioQueue = BoundedAudioQueue()
+try audioQueue.append(Data(repeating: 0, count: 32000)); try audioQueue.append(Data(repeating: 0, count: 32000))
+var overflow = false; do { try audioQueue.append(Data([0, 0])) } catch { overflow = true }
+check(overflow && audioQueue.bytes == 64000, "cloud queue bounded at two seconds PCM")
+_ = audioQueue.next(); check(audioQueue.bytes == 32000, "cloud queue accounts for dequeued audio")
+audioQueue.clear(); check(audioQueue.bytes == 0 && audioQueue.next() == nil, "stop discards buffered audio")
+var preview = CloudPreviewGate()
+check(preview.accept(id: "utterance1", final: false) && preview.accept(id: "utterance1", final: true), "cloud draft and final accepted")
+check(!preview.accept(id: "utterance1", final: false) && !preview.accept(id: "utterance1", final: true), "late drafts and duplicate finals cannot replace final")
+check(preview.accept(id: "utterance2", final: true), "repeated text in a new utterance is not globally suppressed")
+print("Alibaba protocol checks passed.")

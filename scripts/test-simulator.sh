@@ -12,7 +12,7 @@ SIM_DATA=$(xcrun simctl get_app_container "$SIM_DEVICE" com.yuxino.osu.Simulator
 if [ -f "$SIM_DATA/Documents/simulator-test.json" ]; then
   mv "$SIM_DATA/Documents/simulator-test.json" "$SIM_DATA/Documents/simulator-test.previous.json"
 fi
-xcrun simctl launch "$SIM_DEVICE" com.yuxino.osu.SimulatorTests --verify-transport
+xcrun simctl launch "$SIM_DEVICE" com.yuxino.osu.SimulatorTests "${2:---verify-transport}"
 python3 - "$SIM_DATA/Documents/simulator-test.json" <<'PY'
 import json, pathlib, sys, time
 path = pathlib.Path(sys.argv[1])

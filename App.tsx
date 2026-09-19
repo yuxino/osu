@@ -11,7 +11,7 @@ export default function App() {
       <Pressable disabled={!available} accessibilityRole="button" onPress={() => NativeModules.MimiPrototype.open()} style={({ pressed }) => [styles.button, pressed && styles.pressed, !available && styles.disabled]}>
         <Text style={styles.buttonText}>{available ? '打开真机实验' : '需要包含原生模块的 iPhone 安装包'}</Text>
       </Pressable>
-      <Text style={styles.note}>设备本地处理 · 无需 API 密钥{ '\n' }可用语言取决于设备资源；暂不保证所有 App 兼容。</Text>
+      <Text style={styles.note}>Apple 本地 / 阿里云同传{ '\n' }云端模式需自备密钥并上传音频；暂不保证所有 App 兼容。</Text>
       <StatusBar style="dark" />
     </View>
   );
