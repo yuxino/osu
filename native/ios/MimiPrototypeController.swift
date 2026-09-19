@@ -31,6 +31,8 @@ final class MimiPrototypeController: UIViewController {
   private let engineButton = UIButton(type: .system)
   private var keyButton: UIButton!
   private var cloud: AlibabaClient?
+  private let makeCloudClient: () -> AlibabaClient
+  private let readCloudCredential: () throws -> String?
   private var cloudBytes = 0
   private var sampleButton: UIButton!
   private var longSampleButton: UIButton!
@@ -44,6 +46,9 @@ final class MimiPrototypeController: UIViewController {
   private var settingsPage: UIViewController?
   private let serviceHint = UILabel()
   private let broadcastRow = UIStackView()
+  private let cloudTestSection = UIStackView()
+  private let diagnosticFeedback = UILabel()
+  private var copyDiagnosticsButton: UIButton!
   private var pipButton: UIButton!
   private var broadcastConnected = false
   private let picture = SubtitlePicture()
@@ -75,6 +80,14 @@ final class MimiPrototypeController: UIViewController {
   private var lastAudio = Date.distantPast, lastRotation = Date(), sessionStarted = Date(), lastJournal = Date.distantPast
   private var translationBusy = false, audioMissing = false
 
+  // The isolated simulator harness substitutes an in-memory socket and dummy key.
+  // Normal app startup uses the fixed provider endpoint and device Keychain.
+  init(makeCloudClient: (() -> AlibabaClient)? = nil, readCloudCredential: (() throws -> String?)? = nil) {
+    self.makeCloudClient = makeCloudClient ?? { AlibabaClient() }
+    self.readCloudCredential = readCloudCredential ?? { try CloudCredentialStore.read() }
+    super.init(nibName: nil, bundle: nil)
+  }
+  required init?(coder: NSCoder) { fatalError("Use init()") }
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -139,7 +152,7 @@ final class MimiPrototypeController: UIViewController {
     view.backgroundColor = .systemBackground
     let stack = pageStack(in: view)
     let header = UIStackView(); header.axis = .horizontal; header.alignment = .center
-    let title = label("Mimi", size: 35, weight: .semibold)
+    let title = label("Osu", size: 35, weight: .semibold)
     if let descriptor = title.font.fontDescriptor.withDesign(.serif) { title.font = UIFont(descriptor: descriptor, size: title.font.pointSize) }
     header.addArrangedSubview(title)
     let settings = button("", #selector(openSettings)); settings.configuration = .plain(); settings.configuration?.image = UIImage(systemName: "slider.horizontal.3"); settings.tintColor = .label; settings.accessibilityLabel = "设置"
@@ -154,7 +167,7 @@ final class MimiPrototypeController: UIViewController {
     prepareButton = button("准备本地语言包", #selector(prepareLanguages)); stack.addArrangedSubview(prepareButton)
     startButton = button("开始听", #selector(primaryPressed)); var primary = UIButton.Configuration.filled(); primary.baseBackgroundColor = .label; primary.baseForegroundColor = .systemBackground; primary.cornerStyle = .medium; primary.contentInsets = .init(top: 18, leading: 24, bottom: 18, trailing: 24); primary.title = "开始听"; primary.image = UIImage(systemName: "waveform"); primary.imagePadding = 10; startButton.configurationUpdateHandler = nil; startButton.configuration = primary; stack.addArrangedSubview(startButton)
     broadcastRow.axis = .horizontal; broadcastRow.spacing = 12; broadcastRow.alignment = .center
-    let instruction = label("允许收音\n选择 Mimi Audio，开始广播", size: 14)
+    let instruction = label("允许收音\n选择 Osu Audio，开始广播", size: 14)
     broadcastRow.addArrangedSubview(instruction)
     let picker = RPSystemBroadcastPickerView(frame: CGRect(x: 0, y: 0, width: 52, height: 52)); picker.preferredExtension = "com.yuxino.osu.MimiBroadcast"; picker.showsMicrophoneButton = false; picker.tintColor = .label; picker.widthAnchor.constraint(equalToConstant: 52).isActive = true; picker.heightAnchor.constraint(equalToConstant: 52).isActive = true
     picker.accessibilityLabel = "开始屏幕广播"; broadcastRow.addArrangedSubview(picker); stack.addArrangedSubview(broadcastRow)
@@ -166,6 +179,12 @@ final class MimiPrototypeController: UIViewController {
     languageStatus.numberOfLines = 0; languageStatus.font = UIFont.preferredFont(forTextStyle: .footnote); languageStatus.adjustsFontForContentSizeCategory = true; languageStatus.textColor = .secondaryLabel
     counts.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular); counts.numberOfLines = 0; counts.textColor = .secondaryLabel; counts.text = "尚未收到音频"
     sampleButton = button("测试日语同传", #selector(startSampleTest)); longSampleButton = button("连续测试 · 约一分钟", #selector(startLongSampleTest))
+    cloudTestSection.axis = .vertical; cloudTestSection.spacing = 16
+    cloudTestSection.addArrangedSubview(label("检查服务", size: 18, weight: .semibold))
+    cloudTestSection.addArrangedSubview(sampleButton); cloudTestSection.addArrangedSubview(longSampleButton)
+    cloudTestSection.addArrangedSubview(label("测试会把固定的日语合成语音发给阿里云并产生少量用量，不使用麦克风。", size: 12))
+    diagnosticFeedback.numberOfLines = 0; diagnosticFeedback.font = UIFont.preferredFont(forTextStyle: .footnote); diagnosticFeedback.adjustsFontForContentSizeCategory = true; diagnosticFeedback.textColor = .secondaryLabel; diagnosticFeedback.isHidden = true
+    copyDiagnosticsButton = button("复制诊断", #selector(copyDiagnostics))
     transcript.text = ""; translation.text = ""
   }
   @objc private func primaryPressed() { if running || startPending { stopPressed() } else { startPressed() } }
@@ -178,10 +197,10 @@ final class MimiPrototypeController: UIViewController {
     stack.addArrangedSubview(button("重新检查本地语言", #selector(refreshPressed)))
     stack.addArrangedSubview(label("使用方法", size: 18, weight: .semibold))
     stack.addArrangedSubview(label("开始听 → 允许屏幕广播 → 切换到播放内容的 App。关闭字幕小窗也会停止收音。\n\n只处理 App 声音，不采集麦克风和视频，不保存录音或字幕。部分受保护内容无法采集。屏幕广播时需关闭 iPhone 镜像。", size: 14))
-    stack.addArrangedSubview(label("检查服务", size: 18, weight: .semibold)); stack.addArrangedSubview(sampleButton)
-    stack.addArrangedSubview(longSampleButton)
-    stack.addArrangedSubview(label("测试会把固定的日语合成语音发给阿里云并产生少量用量，不使用麦克风。", size: 12))
-    stack.addArrangedSubview(counts); stack.addArrangedSubview(button("复制诊断", #selector(copyDiagnostics))); stack.addArrangedSubview(button("导出诊断", #selector(exportDiagnostics)))
+    stack.addArrangedSubview(cloudTestSection)
+    copyDiagnosticsButton.configuration?.title = "复制诊断"
+    stack.addArrangedSubview(counts); stack.addArrangedSubview(copyDiagnosticsButton); stack.addArrangedSubview(button("导出诊断", #selector(exportDiagnostics)))
+    diagnosticFeedback.text = nil; diagnosticFeedback.isHidden = true; stack.addArrangedSubview(diagnosticFeedback)
     stack.addArrangedSubview(label("诊断只包含时间、阶段、错误代码和计数，不含音频、字幕或密钥。", size: 12))
     #if targetEnvironment(simulator)
     stack.addArrangedSubview(label("模拟器中的系统广播和语言资源不代表真机能力。", size: 12))
@@ -252,10 +271,10 @@ final class MimiPrototypeController: UIViewController {
   }
   private func startCloud() {
     do {
-      guard let key = try CloudCredentialStore.read() else { testingSample = false; setStatus("请先在设置中添加阿里云密钥。"); openSettings(); return }
+      guard let key = try readCloudCredential() else { testingSample = false; setStatus("请先在设置中添加阿里云密钥。"); openSettings(); return }
       log.begin(source: selection.source, target: selection.target); log.record("cloud", "connecting"); log.snapshot(running: false, pip: false, metrics: [:])
       startPending = true; generation += 1; updateControls(); setStatus("正在连接阿里云，连接成功后再开启屏幕广播。")
-      let client = AlibabaClient(); cloud = client
+      let client = makeCloudClient(); cloud = client
       client.onReady = { [weak self, weak client] in
         guard let self, let client, self.cloud === client, self.startPending else { return }
         self.log.record("cloud", "ready"); self.startSession()
@@ -286,8 +305,7 @@ final class MimiPrototypeController: UIViewController {
   }
   private func updateControls() {
     let busy = running || startPending || downloading
-    sampleButton.isHidden = engine != .alibaba
-    longSampleButton.isHidden = engine != .alibaba
+    cloudTestSection.isHidden = engine != .alibaba
     sampleButton.isEnabled = !busy && selection.source == "ja" && AlibabaProtocol.valid(source: selection.source, target: selection.target)
     longSampleButton.isEnabled = sampleButton.isEnabled
     engineButton.isEnabled = !busy; keyButton.isEnabled = !busy; keyButton.isHidden = engine != .alibaba
@@ -309,7 +327,7 @@ final class MimiPrototypeController: UIViewController {
 
     if engine == .alibaba {
       let credential: String
-      do { credential = try CloudCredentialStore.isPresent() ? "密钥已保存。" : "请先配置北京地域百炼 API Key。" }
+      do { credential = try readCloudCredential() != nil ? "密钥已保存。" : "请先配置北京地域百炼 API Key。" }
       catch { credential = "系统钥匙串暂不可用。" }
       languageStatus.text = "沿用 Mimi 的低延迟同传服务；无需下载 Apple 语言包。\n开始后 App 音频将通过加密连接上传到阿里云（北京），由你的阿里云账户计费。\n" + credential + (pairState.canStart ? "" : "\n请选择不同的声音和字幕语言。")
       return
@@ -393,6 +411,7 @@ final class MimiPrototypeController: UIViewController {
   @objc private func startPressed() {
     if running { picture.start(); return }
     guard !startPending && !downloading else { return }
+    if engine == .alibaba && !pairState.canStart { setStatus("声音和字幕语言相同，请在上方选择不同的语言。"); return }
     guard pairState.canStart && localSources.contains(selection.source) else { setStatus("此语言暂不可用，请选择其他语言或在设置中检查资源。"); openSettings(); return }
     if engine == .alibaba { startCloud(); return }
     startPending = true; generation += 1; let epoch = generation; updateControls()
@@ -448,7 +467,7 @@ final class MimiPrototypeController: UIViewController {
     } catch { log.record("audio", "start_failed", error: error); receiver.stop(); cloud?.stop(); cloud = nil; testingSample = false; try? AVAudioSession.sharedInstance().setActive(false); updateControls(); setStatus("无法启动收音，错误已写入诊断。"); return }
     broadcastConnected = false; running = true; sourceFinals = 0; translationFinals = 0; cloudBytes = 0; receivedFrames = 0; seconds = 0; peak = 0; recognitionUpdates = 0; translationUpdates = 0; recognitionRestarts = 0; translationMS = 0; newest = ""; lastTranslated = ""; translationBusy = false; audioMissing = false; sessionStarted = Date(); lastAudio = .distantPast; lastJournal = .distantPast
     transcript.text = "原文等待中"; translation.text = selection.target.isEmpty ? "仅显示原文" : "译文等待中"; picture.original = "等待其他 App 的声音"; picture.translated = selection.target.isEmpty ? "仅显示原文" : "等待翻译"
-    if engine == .apple { startRecognition() }; updateControls()
+    if engine == .apple { startRecognition() }; updateControls(); updateCounts()
     heartbeat = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
     setStatus("正在准备收音…"); log.record("session", "running"); picture.prime(); if !testingSample { picture.start() }; writeSnapshot(); if testingSample { beginSample() }
   }
@@ -487,9 +506,13 @@ final class MimiPrototypeController: UIViewController {
     ["sourceFinals": Double(sourceFinals), "translationFinals": Double(translationFinals), "cloudBytes": Double(cloudBytes), "audioFrames": Double(receivedFrames), "audioSeconds": seconds, "recognitionUpdates": Double(recognitionUpdates), "translationUpdates": Double(translationUpdates), "peak": peak, "elapsed": Date().timeIntervalSince(sessionStarted), "translationMS": translationMS, "recognitionRestarts": Double(recognitionRestarts), "audioGapSeconds": receivedFrames == 0 ? Date().timeIntervalSince(sessionStarted) : Date().timeIntervalSince(lastAudio)]
   }
   private func writeSnapshot() { log.snapshot(running: running, pip: running && picture.active, metrics: metrics) }
+  private func updateCounts() {
+    let caption = running ? "当前会话" : "上次会话"
+    counts.text = receivedFrames == 0 ? "尚未收到音频" : caption + String(format: " · 音频 %.1f 秒\n识别 %d 次 · 翻译 %d 次", seconds, recognitionUpdates, translationUpdates)
+  }
   private func tick() {
     guard running else { return }
-    counts.text = String(format: "音频 %.1f 秒 · 帧 %d · 音量 %.0f%%\n识别 %d 次 · 翻译 %d 次", seconds, receivedFrames, peak * 100, recognitionUpdates, translationUpdates)
+    updateCounts()
     if !testingSample && !finishing && (receivedFrames == 0 ? Date().timeIntervalSince(sessionStarted) : Date().timeIntervalSince(lastAudio)) > 5 && !audioMissing {
       audioMissing = true; log.record("audio", "waiting_or_gap", metrics: metrics); setStatus("等待音频：请检查广播和播放状态；受保护内容可能无法采集。")
     }
@@ -512,13 +535,22 @@ final class MimiPrototypeController: UIViewController {
     if Date().timeIntervalSince(lastJournal) >= 5 { log.record("session", "counters", metrics: metrics); lastJournal = Date() }
     writeSnapshot()
   }
-  @objc private func copyDiagnostics() { UIPasteboard.general.string = log.report(); setStatus("诊断已复制，包含近期会话记录，不含音频或字幕。") }
+  private func showDiagnosticFeedback(_ message: String) {
+    diagnosticFeedback.text = message; diagnosticFeedback.isHidden = false
+    UIAccessibility.post(notification: .announcement, argument: message)
+  }
+  @objc private func copyDiagnostics() {
+    UIPasteboard.general.string = log.report()
+    copyDiagnosticsButton.configuration?.title = "已复制诊断"
+    showDiagnosticFeedback("诊断已复制，可粘贴到反馈消息中。内容不含音频、字幕或密钥。")
+  }
   @objc private func exportDiagnostics() {
     do {
       let url = try log.export(); let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-      sheet.popoverPresentationController?.sourceView = view; sheet.popoverPresentationController?.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+      let source = presenter.view!
+      sheet.popoverPresentationController?.sourceView = source; sheet.popoverPresentationController?.sourceRect = CGRect(x: source.bounds.midX, y: source.bounds.midY, width: 1, height: 1)
       presenter.present(sheet, animated: true)
-    } catch { setStatus("无法导出诊断，请检查设备存储空间。") }
+    } catch { showDiagnosticFeedback("无法导出诊断，请检查设备存储空间。") }
   }
   @objc private func stopPressed() {
     if finishing { stopSession(reason: "finish_cancelled") }
@@ -550,7 +582,7 @@ final class MimiPrototypeController: UIViewController {
     if #available(iOS 26.0, *) { translator?.cancel() }; translator = nil
     picture.stop()
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    log.record("session", reason, metrics: metrics); writeSnapshot(); updateControls()
+    log.record("session", reason, metrics: metrics); writeSnapshot(); updateControls(); updateCounts()
     setStatus("已停止。准备好了就再开始。")
     refreshLanguages()
   }

@@ -9,9 +9,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yuxino.osu",
-      "buildNumber": "2",
+      "buildNumber": "4",
       "infoPlist": {
-        "CFBundleDisplayName": "Mimi"
+        "CFBundleDisplayName": "Osu"
       }
     },
     "android": {

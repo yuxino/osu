@@ -11,11 +11,14 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
   private var client: NWConnection?
   private let cloudFixture = CloudFixture()
   private let lifecycle = CloudLifecycleFixture()
+  private let cloudUI = CloudUIFixture()
   private let sample = CloudSampleTest()
   private var completed = false
   private let queue = DispatchQueue(label: "mimi.simulator.tests")
   func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-    let w = UIWindow(frame: UIScreen.main.bounds); w.rootViewController = MimiPrototypeController(); w.makeKeyAndVisible(); window = w
+    let w = UIWindow(frame: UIScreen.main.bounds)
+    w.rootViewController = ProcessInfo.processInfo.arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController()
+    w.makeKeyAndVisible(); window = w
     if ProcessInfo.processInfo.arguments.contains("--verify-transport") { verifyTransport() }
     if ProcessInfo.processInfo.arguments.contains("--verify-cloud") {
       cloudFixture.run { [weak self] ok, result in self?.finish(ok, result) }

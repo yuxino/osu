@@ -37,14 +37,14 @@ phase.dst_subfolder_spec = '13'
 unless phase.files_references.include?(extension.product_reference)
  f=phase.add_file_reference(extension.product_reference); f.settings={'ATTRIBUTES'=>['RemoveHeadersOnCopy']}
 end
-info = {'CFBundleDisplayName'=>'Mimi Audio','CFBundleExecutable'=>'$(EXECUTABLE_NAME)','CFBundleIdentifier'=>'$(PRODUCT_BUNDLE_IDENTIFIER)','CFBundleInfoDictionaryVersion'=>'6.0','CFBundleName'=>'$(PRODUCT_NAME)','CFBundlePackageType'=>'XPC!','CFBundleShortVersionString'=>version,'CFBundleVersion'=>build_number,'NSExtension'=>{'NSExtensionPointIdentifier'=>'com.apple.broadcast-services-upload','NSExtensionPrincipalClass'=>'$(PRODUCT_MODULE_NAME).SampleHandler','RPBroadcastProcessMode'=>'RPBroadcastProcessModeSampleBuffer'}}
+info = {'CFBundleDisplayName'=>'Osu Audio','CFBundleExecutable'=>'$(EXECUTABLE_NAME)','CFBundleIdentifier'=>'$(PRODUCT_BUNDLE_IDENTIFIER)','CFBundleInfoDictionaryVersion'=>'6.0','CFBundleName'=>'$(PRODUCT_NAME)','CFBundlePackageType'=>'XPC!','CFBundleShortVersionString'=>version,'CFBundleVersion'=>build_number,'NSExtension'=>{'NSExtensionPointIdentifier'=>'com.apple.broadcast-services-upload','NSExtensionPrincipalClass'=>'$(PRODUCT_MODULE_NAME).SampleHandler','RPBroadcastProcessMode'=>'RPBroadcastProcessModeSampleBuffer'}}
 Xcodeproj::Plist.write_to_path(info, File.join(native,'Broadcast-Info.plist'))
 info_path = File.join(ios,'osu/Info.plist')
 p = Xcodeproj::Plist.read_from_path(info_path)
-p['CFBundleDisplayName']='Mimi'
+p['CFBundleDisplayName']='Osu'
 p['CFBundleVersion']=build_number
 p['NSSpeechRecognitionUsageDescription']='将你主动共享的 App 声音转成本地字幕；不上传音频。'
 p['UIBackgroundModes'] = ((p['UIBackgroundModes'] || []) + ['audio']).uniq
 Xcodeproj::Plist.write_to_path(p,info_path)
 project.save
-puts 'Configured Mimi host, broadcast extension, and local-only transport.'
+puts 'Configured Osu host, broadcast extension, and local-only transport.'

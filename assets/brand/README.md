@@ -1,6 +1,8 @@
-# Mimi character mark
+# Osu character mark
 
 Created on 2026-09-19 with the built-in image generation tool, using the user's supplied green-haired maid illustration as a character reference. The reference image is not included in this repository.
+
+The product name is **Osu**, as confirmed by the user. The original prompts and asset filenames retain the provisional Mimi name for generation provenance and stable file links; the artwork itself contains no lettering.
 
 - `mimi-maid-v1.png`: 1254 × 1254 RGBA character mark with a real transparent background. Preserve its generated alpha.
 - `mimi-app-icon-v1.png`: 1254 × 1254 opaque RGB companion for the iPhone app icon. It was generated as a separate variant and has small drawing differences from the transparent mark.

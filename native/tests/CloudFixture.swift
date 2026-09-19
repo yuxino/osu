@@ -7,6 +7,7 @@ import Foundation
   private var waiting: CheckedContinuation<Data, Error>?
   private(set) var closed = false
   var acknowledgeSetup = true, acknowledgeFinish = true
+  var onClose: (() -> Void)?
   func send(_ text: String) async throws {
     guard !closed else { throw AlibabaProtocol.Failure.transport }
     let object = try JSONSerialization.jsonObject(with: Data(text.utf8)) as! [String: Any]
@@ -28,7 +29,33 @@ import Foundation
     return try await withCheckedThrowingContinuation { waiting = $0 }
   }
   func ping() async throws { if closed { throw AlibabaProtocol.Failure.transport } }
-  func close() { closed = true; waiting?.resume(throwing: AlibabaProtocol.Failure.transport); waiting = nil; messages.removeAll() }
+  func close() { guard !closed else { return }; closed = true; waiting?.resume(throwing: AlibabaProtocol.Failure.transport); waiting = nil; messages.removeAll(); onClose?() }
+}
+
+// Controlled failures in the actual controller; all UI actions remain manual.
+// This file is only linked into the separate simulator harness, never the app.
+@MainActor final class CloudUIFixture {
+  private var sockets: [FixtureRealtimeSocket] = []
+  func controller() -> MimiPrototypeController {
+    UserDefaults.standard.set("alibaba", forKey: "mimi.engine")
+    UserDefaults.standard.set("ja", forKey: "mimi.alibaba.source")
+    UserDefaults.standard.set("zh", forKey: "mimi.alibaba.target")
+    return MimiPrototypeController(makeCloudClient: { [self] in
+      let socket = FixtureRealtimeSocket()
+      // First connection never becomes ready; later ones never confirm finish.
+      socket.acknowledgeSetup = !sockets.isEmpty; socket.acknowledgeFinish = false
+      sockets.append(socket)
+      socket.onClose = { [weak self] in self?.writeState() }
+      writeState()
+      return AlibabaClient(factory: { _ in socket })
+    }, readCloudCredential: { "fixture-only" })
+  }
+  private func writeState() {
+    let rows = sockets.map { ["closed": $0.closed, "audio": $0.sentAudio, "finish": $0.sentFinish] as [String: Any] }
+    let document: [String: Any] = ["scope": "UI lifecycle only; in-memory fake service, dummy credential, no network", "sockets": rows, "timestamp": ISO8601DateFormatter().string(from: Date())]
+    let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("cloud-ui-state.json")
+    if let data = try? JSONSerialization.data(withJSONObject: document) { try? data.write(to: path, options: .atomic) }
+  }
 }
 
 @MainActor final class CloudFixture {

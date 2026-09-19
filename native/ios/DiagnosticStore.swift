@@ -35,6 +35,7 @@ final class DiagnosticStore {
     queue.sync {
       sequence += 1
       var object: [String: Any] = ["schema": 1, "eventID": UUID().uuidString, "timestamp": ISO8601DateFormatter().string(from: Date()), "sessionID": sessionID, "sequence": sequence, "stage": token(stage), "event": token(event), "os": ProcessInfo.processInfo.operatingSystemVersionString, "appVersion": token(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "test"), "process": Bundle.main.bundleIdentifier?.hasSuffix("MimiBroadcast") == true ? "broadcast" : "host"]
+      object["appBuild"] = token(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "test")
       object["metrics"] = metrics.filter { numericKeys.contains($0.key) && $0.value.isFinite }
       if let error { let e = error as NSError; object["error"] = ["domain": domains.contains(e.domain) ? e.domain : "other", "code": e.code] }
       if let source { object["source"] = token(source) }; if let target { object["target"] = token(target) }
@@ -80,7 +81,7 @@ final class DiagnosticStore {
   }
   func report() -> String {
     queue.sync {
-      var result = "Mimi local diagnostics · schema 1\nCaptured: \(ISO8601DateFormatter().string(from: Date()))\nStorage failure: \(storageFailed)\nNo audio, transcripts or credentials. Historical records; not a live device connection.\n"
+      var result = "Osu local diagnostics · schema 1\nCaptured: \(ISO8601DateFormatter().string(from: Date()))\nStorage failure: \(storageFailed)\nNo audio, transcripts or credentials. Historical records; not a live device connection.\n"
       for index in (0..<fileCount).reversed() { if let data = try? Data(contentsOf: logURL(index)), data.count <= maxBytes, let text = String(data: data, encoding: .utf8) { result += text } }
       return result
     }

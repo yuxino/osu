@@ -9,7 +9,7 @@ export default function App() {
   }, [available]);
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Mimi</Text>
+      <Text style={styles.title}>Osu</Text>
       <Text style={styles.description}>听懂此刻。</Text>
       <Pressable disabled={!available} accessibilityRole="button" onPress={() => NativeModules.MimiPrototype.open()} style={styles.button}>
         <Text style={styles.buttonText}>{available ? '打开字幕' : '请使用 iPhone 版本'}</Text>
