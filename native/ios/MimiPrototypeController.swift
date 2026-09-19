@@ -61,6 +61,7 @@ final class MimiPrototypeController: UIViewController {
   private var audioDelivery: PCMDeliveryBuffer?
   private let status = UILabel(), transcript = UILabel(), translation = UILabel(), counts = UILabel(), languageStatus = UILabel()
   private let sourceButton = UIButton(type: .system), targetButton = UIButton(type: .system)
+  private let languageRow = UIStackView()
   private var prepareButton: UIButton!, startButton: UIButton!
   private var selection = LanguageSelection(source: "auto", target: "zh")
   private var pairState = PairReadiness.checking
@@ -105,6 +106,9 @@ final class MimiPrototypeController: UIViewController {
     log.record("app", "opened")
     log.snapshot(running: false, pip: false, metrics: [:])
     buildHome()
+    registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (controller: MimiPrototypeController, _: UITraitCollection) in
+      controller.updateLanguageLayout()
+    }
     picture.onStatus = { [weak self] text in if self?.capture.connected == true { self?.setStatus(text) } }
     picture.onEvent = { [weak self] event, error in
       self?.log.record("pip", event, error: error)
@@ -175,11 +179,13 @@ final class MimiPrototypeController: UIViewController {
     if let descriptor = title.font.fontDescriptor.withDesign(.serif) { title.font = UIFont(descriptor: descriptor, size: title.font.pointSize) }
     header.addArrangedSubview(title)
     let settings = button("", #selector(openSettings)); settings.configuration = .plain(); settings.configuration?.image = UIImage(systemName: "slider.horizontal.3"); settings.tintColor = .label; settings.accessibilityLabel = "设置"
+    settings.configuration?.contentInsets = .zero; settings.configuration?.preferredSymbolConfigurationForImage = .init(pointSize: 20, weight: .regular)
     settings.widthAnchor.constraint(equalToConstant: 48).isActive = true; header.addArrangedSubview(settings); stack.addArrangedSubview(header)
     let intro = label("听懂此刻。", size: 30, weight: .semibold); stack.addArrangedSubview(intro)
     let subtitle = label("为正在播放的声音，添上你的语言。", size: 15); subtitle.textColor = .secondaryLabel; stack.addArrangedSubview(subtitle); stack.setCustomSpacing(28, after: subtitle)
     configureChoice(sourceButton); configureChoice(targetButton)
-    let languages = UIStackView(arrangedSubviews: [sourceButton, targetButton]); languages.axis = .horizontal; languages.spacing = 10; languages.distribution = .fillEqually; stack.addArrangedSubview(languages)
+    languageRow.spacing = 10; languageRow.addArrangedSubview(sourceButton); languageRow.addArrangedSubview(targetButton)
+    updateLanguageLayout(); stack.addArrangedSubview(languageRow)
     picture.original = "播放一段你想听懂的内容"; picture.translated = "字幕会出现在这里"
     stack.addArrangedSubview(picture.preview); picture.preview.heightAnchor.constraint(equalTo: picture.preview.widthAnchor, multiplier: LyricsPainter.aspect).isActive = true
     status.numberOfLines = 0; status.font = UIFont.preferredFont(forTextStyle: .subheadline); status.adjustsFontForContentSizeCategory = true; status.textColor = .secondaryLabel; status.text = selection.source == "auto" ? CaptureReadiness.State.idle.message : "准备好了就开始。声音语言可在上方随时调整。"; stack.addArrangedSubview(status)
@@ -202,6 +208,11 @@ final class MimiPrototypeController: UIViewController {
     diagnosticFeedback.numberOfLines = 0; diagnosticFeedback.font = UIFont.preferredFont(forTextStyle: .footnote); diagnosticFeedback.adjustsFontForContentSizeCategory = true; diagnosticFeedback.textColor = .secondaryLabel; diagnosticFeedback.isHidden = true
     copyDiagnosticsButton = button("复制诊断", #selector(copyDiagnostics))
     transcript.text = ""; translation.text = ""
+  }
+  private func updateLanguageLayout() {
+    let largeText = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+    languageRow.axis = largeText ? .vertical : .horizontal
+    languageRow.distribution = largeText ? .fill : .fillEqually
   }
   @objc private func primaryPressed() { if running || startPending { stopPressed() } else { startPressed() } }
   @objc private func showPicture() { guard running && mediaActive && !finishing && !testingSample else { return }; picture.start() }
