@@ -8,7 +8,7 @@
 
 使用固定模型 `qwen3.5-livetranslate-flash-realtime`，北京 DashScope WebSocket，16 kHz 单声道 PCM16，与桌面 Mimi 低延迟方案一致。源语言自动/中/英/日/韩；目标中/英/日。显式相同源与目标不能启动；仅显示原文使用 Apple 模式。
 
-点「开始听」后连接云端，并主动显示 Osu Audio 系统广播入口。收到真实广播连接后才开启字幕小窗；普通页面不启动媒体。停止或关闭字幕窗会立即停止采集，不自动重连。发送缓存限制约两秒；拥塞、超时或服务错误会停止，需手动重试。停止时发送已排队音频和 session.finish，等待约八秒收取最后结果与 session.finished（每秒检查一次超时）；立即结束、超时或网络中断仍可能丢失末句。原文和译文分别显示最新结果，不提供逐句配对历史。
+点「开始听」后显示 Osu Audio 系统广播入口；收到广播音频后才连接云端，等待系统确认时不会提前建立云端会话。收到真实广播连接后才开启字幕小窗；普通页面不启动媒体。停止或关闭字幕窗会立即停止采集，不自动重连。发送缓存限制约两秒；拥塞、超时或服务错误会停止，需手动重试。停止时发送已排队音频和 session.finish，等待约八秒收取最后结果与 session.finished（每秒检查一次超时）；立即结束、超时或网络中断仍可能丢失末句。原文和译文分别更新，云端译文按句子滚动，不提供逐句配对历史。
 
 ## 模拟器测试
 
@@ -18,7 +18,7 @@ Apple 翻译模型不支持模拟器，因此云端路径绕开了这一限制�
 
 2026-09-19 已通过完整 Release 模拟器构建和未签名 iPhone 编译，并在独立 App 界面验证阿里云切换、日语 → 中文及缺密钥时阻止启动。
 
-已通过协议/缓冲/过期事件测试、模拟器钥匙串增改查删、模拟 WebSocket 的生产客户端收发停止流程，以及模拟器日语合成 PCM 生成。另已真实测试阿里云日语 → 中文：51.65 秒音频、6 段最终原文和译文、服务结束确认并停止。B站跨 App 收音和新版手机后台验收尚未完成，不能用合成语音或旧版英文真机结果代替；见 [验收记录](acceptance/2026-09-19.md)。
+已通过协议/缓冲/过期事件测试、模拟器钥匙串增改查删、模拟 WebSocket 的生产客户端收发停止流程，以及模拟器日语合成 PCM 生成。真机 build 8 已完成约 4.6 分钟 B 站日语视频收音与翻译；build 9 已验证歌词小窗和真实阿里云合成语音测试，但尚未重跑新版跨 App 长测。各版本的验证范围见 [验收记录](acceptance/2026-09-19.md)。
 
 ```sh
 scripts/test-native.sh
@@ -35,4 +35,4 @@ scripts/test-simulator.sh SIMULATOR_UDID --verify-transport
 - [阿里云服务端事件](https://www.alibabacloud.com/help/en/model-studio/live-translator-server-events)
 - 桌面 Mimi：`src-tauri/src/core/protocols/live_translate.rs`、`src-tauri/src/clients/live_translate_client.rs`。
 
-当前交付为源码预览版。iPhone 编译通过不等于已签名分发；没有 TestFlight/App Store 发布，需使用自己的 Apple 开发签名安装。不会在本轮自动操作手机。
+当前交付为源码预览版。已完成开发签名真机安装；没有 TestFlight/App Store 发布，其他设备需使用自己的 Apple 开发签名安装。
