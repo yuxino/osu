@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/brand/mimi-maid-v1.png" width="112" height="112" alt="Osu 头像">
   <h1>Osu</h1>
-  <p>在 iPhone 上，边听边看译文。</p>
+  <p>iPhone 上的悬浮翻译字幕。</p>
   <p>
     <a href="README.md">English</a>
     · <a href="CONTRIBUTING.md">从源码安装</a>
@@ -9,7 +9,7 @@
   </p>
 </div>
 
-将其他 App 的声音变成悬浮字幕，灵感来自桌面端 [Mimi](https://github.com/yuxino/mimi)。
+Osu 将其他 iPhone App 播放的声音识别、翻译成字幕，显示在画中画小窗中。灵感来自桌面端 [Mimi](https://github.com/yuxino/mimi)。
 
 **预览版 · iOS 18+ · 需从源码安装。** 暂未上架 App Store 或 TestFlight。
 
@@ -20,7 +20,7 @@
 ## 功能
 
 - **像歌词一样显示**：云端字幕逐句上移，当前译文醒目，上一句淡下去。默认只看译文，原文可在首页或设置中开关。
-- **自动识别语言**：阿里云模式默认自动识别原文、翻译成中文，想指定语言时再选。
+- **自动识别语言**：阿里云模式默认自动识别原文语言、翻译成中文，也可手动选择语言。
 - **本地或云端**：可选 Apple 本地识别与翻译，或阿里云实时同传。Apple 翻译需要 iOS 26 和支持的语言包，本地识别需手动指定原文语言。
 
 ## 开始使用

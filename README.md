@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/brand/mimi-maid-v1.png" width="112" height="112" alt="Osu mascot">
   <h1>Osu</h1>
-  <p>Live translated subtitles for your iPhone.</p>
+  <p>Floating translated subtitles for iPhone.</p>
   <p>
     <a href="README_ZH.md">简体中文</a>
     · <a href="CONTRIBUTING.md">Build from source</a>
@@ -9,7 +9,7 @@
   </p>
 </div>
 
-Turn audio from other apps into a floating subtitle window. Inspired by [Mimi](https://github.com/yuxino/mimi), built for iPhone.
+Osu transcribes and translates audio from other iPhone apps, then displays the captions in a Picture in Picture window. It is inspired by the desktop app [Mimi](https://github.com/yuxino/mimi).
 
 **Preview · iOS 18+ · Install from source.** No App Store or TestFlight release yet.
 
