@@ -30,6 +30,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     if arguments.contains("--verify-island-in-process") { w.rootViewController = UIViewController() }
     else if motion { w.rootViewController = UIViewController() }
     else if arguments.contains("--verify-interactions") || arguments.contains("--interactions-ui") { w.rootViewController = interactions.controller() }
+    else if arguments.contains("--verify-island-unavailable") { w.rootViewController = cloudUI.controller(ready: true) }
     else if arguments.contains("--broadcast-ui") { w.rootViewController = cloudUI.controller(ready: true, systemPicker: true) }
     else if stream { w.rootViewController = endurance.controller() }
     else if arguments.contains("--verify-session-finish") || backgroundFinish { w.rootViewController = sessionFinish.controller(systemBackground: backgroundFinish) }
@@ -57,6 +58,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
       captureStartup.run(controller: controller, fixture: cloudUI) { [weak self] ok, result in self?.finish(ok, result) }
     }
     if let controller = w.rootViewController as? MimiPrototypeController {
+      if arguments.contains("--verify-island-unavailable") { islandFixture.verifyUnavailableMode(controller, fixture: cloudUI) { [weak self] ok, result in self?.finish(ok, result) } }
       if arguments.contains("--verify-interactions") { interactions.run(controller) { [weak self] ok, result in self?.finish(ok, result) } }
       if stream { endurance.run(controller: controller, duration: arguments.contains("--verify-stream-endurance") ? 900 : 12) { [weak self] ok, result in self?.finish(ok, result) } }
       if arguments.contains("--verify-session-finish") { sessionFinish.run(controller: controller) { [weak self] ok, result in self?.finish(ok, result) } }

@@ -1,12 +1,15 @@
 # Dynamic Island subtitles
 
-**Status:** the first implementation failed on a physical device — the broadcast
-extension cannot look up a host-created activity, because `Activity.activities`
-is process-scoped. The redesign lets the broadcast extension create and own its
-own Live Activity, so no identifier crosses the process boundary. Independent
-mode is re-enabled as an experimental feature; see [the failure, redesign and
-simulator record](../acceptance/2026-09-25-island.md). The first design and its
-checks below are retained as history.
+**Status:** closed for client-side designs. The first implementation failed on
+device — the broadcast extension cannot look up a host-created activity because
+`Activity.activities` is process-scoped. The extension-owned redesign also
+failed on device: `Activity.request` from the broadcast extension throws
+`ActivityAuthorizationError.visibility`, because Apple only allows a
+foregrounded process to start a Live Activity. Island mode is blocked before
+broadcast again, with the accurate explanation; see [the full evidence record](../acceptance/2026-09-25-island.md).
+Reviving the mode requires updating a host-created activity through APNs
+`liveactivity` pushes, which needs a backend component and is a product
+decision. The first design and its checks below are retained as history.
 
 ## Redesign (extension-owned activity)
 
