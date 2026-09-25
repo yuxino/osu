@@ -74,6 +74,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
       finish(idle && unchanged && stopped, "idle_labels_do_not_register_media_and_stop_releases_source")
     }
     if ProcessInfo.processInfo.arguments.contains("--verify-transport") { verifyTransport() }
+    if ProcessInfo.processInfo.arguments.contains("--verify-listener-rebind") { verifyListenerRebind() }
     if ProcessInfo.processInfo.arguments.contains("--verify-cloud") {
       cloudFixture.run { [weak self] ok, result in self?.finish(ok, result) }
       DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in self?.finish(false, "cloud_fixture_timeout") }
@@ -86,6 +87,35 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
       }
     }
     return true
+  }
+  // Exercises the production resume path: the controller refreshes the
+  // listener by cancelling and immediately rebinding the fixed port. The
+  // session must return to ready without surfacing listener_failed. The
+  // device-side EADDRINUSE conflict itself surfaces differently there and is
+  // covered by the bounded rebind inside AudioReceiver plus device logs.
+  private func verifyListenerRebind() {
+    let receiver = AudioReceiver()
+    var phase = 0
+    receiver.onEvent = { [weak self] event, _, _ in
+      guard let self else { return }
+      if event == "ready" {
+        if phase == 0 {
+          phase = 1
+          // Mirror the controller: refresh from the main thread, never from
+          // inside this receiver-queue callback.
+          DispatchQueue.main.async { [weak self, receiver] in
+            let restarted = (try? receiver.refreshUnconnectedListener()) ?? false
+            if !restarted { self?.finish(false, "refresh_did_not_restart_listener") }
+          }
+        } else { self.finish(true, "listener_rebind_returns_to_ready_without_failure") }
+      }
+      if event == "listener_failed" { self.finish(false, "listener_failed_during_rebind") }
+    }
+    do { try receiver.start() } catch { self.finish(false, "receiver_start_threw"); return }
+    // Hold the receiver for the whole window; its internal callbacks are weak.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self, receiver] in
+      self?.finish(false, "rebind_fixture_timeout")
+    }
   }
   private func verifyTransport() {
     receiver.onEvent = { [weak self] event, _, _ in

@@ -98,33 +98,52 @@ import Network
     Task { @MainActor in
       do {
         try await Task.sleep(nanoseconds: 500_000_000)
-        try press("开始听", in: controller.view)
+        try await pressWhenAvailable("开始听", in: controller.view, step: "first")
         try await Task.sleep(nanoseconds: 45_000_000_000)
         guard fixture.sockets.isEmpty, fixture.pickerRequests == 1, controller.presentedViewController == nil else { throw failure("permission_wait_created_cloud_or_extra_guide") }
         NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
         try await Task.sleep(nanoseconds: 300_000_000)
         guard fixture.sockets.isEmpty, fixture.pickerRequests == 1, controller.presentedViewController == nil else { throw failure("resume_reopened_system_picker") }
-        try press("开始听", in: controller.view)
-        try await Task.sleep(nanoseconds: 300_000_000)
-        guard fixture.pickerRequests == 2, fixture.sockets.isEmpty else { throw failure("explicit_retry_did_not_request_picker") }
-        try press("取消", in: controller.view)
+        try await pressWhenAvailable("开始听", in: controller.view, step: "retry")
+        // The rebind's ready (and with it the re-requested picker) may land
+        // within the bounded recovery window rather than instantly.
+        var requested = false
+        for _ in 0..<30 {
+          if fixture.pickerRequests == 2, fixture.sockets.isEmpty { requested = true; break }
+          try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        guard requested else { throw failure("explicit_retry_did_not_request_picker") }
+        try await pressWhenAvailable("取消", in: controller.view, step: "cancel")
         try await Task.sleep(nanoseconds: 700_000_000)
         guard fixture.sockets.isEmpty, controller.presentedViewController == nil else { throw failure("permission_cancel_did_not_stay_local") }
         guard subtitle(in: controller.view)?.contains("字幕会出现在这里") == true else { throw failure("cancel_left_waiting_subtitle") }
-        try press("开始听", in: controller.view)
-        try await Task.sleep(nanoseconds: 700_000_000)
-        let connection = NWConnection(host: "127.0.0.1", port: 49371, using: .tcp); self.connection = connection
-        connection.start(queue: DispatchQueue(label: "osu.capture.startup.fixture"))
-        // The very first authenticated packet also carries PCM. It must survive
-        // the cloud setup callback and keep the same receiver generation.
-        try await send(["key": MimiWire.key, "event": "started", "audio": Data([0, 1, 2, 3]).base64EncodedString()], to: connection)
+        try await pressWhenAvailable("开始听", in: controller.view, step: "third")
+        // The listener itself may still be inside its bounded rebind window;
+        // retry the connection until the first packet is accepted.
+        var connection: NWConnection?
+        var accepted = false
+        for _ in 0..<16 {
+          let candidate = NWConnection(host: "127.0.0.1", port: 49371, using: .tcp)
+          connection = candidate; self.connection = candidate
+          candidate.start(queue: DispatchQueue(label: "osu.capture.startup.fixture"))
+          do {
+            // The very first authenticated packet also carries PCM. It must survive
+            // the cloud setup callback and keep the same receiver generation.
+            try await send(["key": MimiWire.key, "event": "started", "audio": Data([0, 1, 2, 3]).base64EncodedString()], to: candidate)
+            accepted = true; break
+          } catch {
+            candidate.cancel(); connection = nil; self.connection = nil
+            try await Task.sleep(nanoseconds: 250_000_000)
+          }
+        }
+        guard accepted, let connection else { throw failure("listener_never_accepted_connection") }
         try await Task.sleep(nanoseconds: 700_000_000)
         guard fixture.sockets.count == 1, fixture.sockets[0].sentAudio == 1 else { throw failure("first_authenticated_audio_lost") }
         NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
         try await send(["key": MimiWire.key, "event": "heartbeat", "audio": Data([4, 5, 6, 7]).base64EncodedString()], to: connection)
         try await Task.sleep(nanoseconds: 300_000_000)
         guard fixture.sockets.count == 1, fixture.sockets[0].sentAudio == 2 else { throw failure("cloud_ready_restarted_receiver") }
-        try press("停止", in: controller.view)
+        try await pressWhenAvailable("停止", in: controller.view, step: "stop")
         try await Task.sleep(nanoseconds: 700_000_000)
         guard fixture.sockets[0].closed, fixture.sockets[0].sentFinish == 1 else { throw failure("capture_stop_did_not_close_cloud") }
         guard subtitle(in: controller.view)?.contains("你好") == true else { throw failure("stop_cleared_received_subtitle") }
@@ -136,12 +155,28 @@ import Network
       }
     }
   }
-  private func press(_ title: String, in view: UIView) throws {
+  // The bounded listener rebind can delay the next ready by under a second;
+  // wait for the action to become available instead of pressing blind.
+  private func pressWhenAvailable(_ title: String, in view: UIView, step: String) async throws {
+    for _ in 0..<30 {
+      if let button = pressTarget(title, in: view) { button.sendActions(for: .touchUpInside); return }
+      try await Task.sleep(nanoseconds: 100_000_000)
+    }
+    try press(title, in: view, step: step)
+  }
+  private func pressTarget(_ title: String, in view: UIView) -> UIButton? {
     func button(in view: UIView) -> UIButton? {
       if let button = view as? UIButton, button.configuration?.title == title, button.isEnabled { return button }
       return view.subviews.lazy.compactMap { button(in: $0) }.first
     }
-    guard let target = button(in: view) else { throw failure("capture_action_unavailable") }
+    return button(in: view)
+  }
+  private func press(_ title: String, in view: UIView, step: String) throws {
+    func button(in view: UIView) -> UIButton? {
+      if let button = view as? UIButton, button.configuration?.title == title, button.isEnabled { return button }
+      return view.subviews.lazy.compactMap { button(in: $0) }.first
+    }
+    guard let target = button(in: view) else { throw failure("capture_action_unavailable_\(title)_at_\(step)") }
     target.sendActions(for: .touchUpInside)
   }
   private func subtitle(in view: UIView) -> String? {
