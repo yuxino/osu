@@ -60,12 +60,22 @@ enum AlibabaProtocol {
   }
 }
 
+// Realtime captions must never die because a handshake was slow. The queue
+// holds the newest two seconds of PCM; overflow drops the oldest audio (it has
+// already played) instead of failing the session.
 struct BoundedAudioQueue {
+  static let capacity = 64000
   private(set) var bytes = 0
   private var chunks: [Data] = []
-  mutating func append(_ data: Data) throws {
-    guard !data.isEmpty, data.count % 2 == 0, data.count <= 32768, bytes + data.count <= 64000, chunks.count < 128 else { throw AlibabaProtocol.Failure.overload }
+  mutating func append(_ data: Data) {
+    guard !data.isEmpty, data.count % 2 == 0, data.count <= 32768, data.count <= Self.capacity else { return }
     chunks.append(data); bytes += data.count
+    while bytes > Self.capacity, !chunks.isEmpty {
+      bytes -= chunks.removeFirst().count
+    }
+    while chunks.count > 256, !chunks.isEmpty {
+      bytes -= chunks.removeFirst().count
+    }
   }
   mutating func next() -> Data? { guard !chunks.isEmpty else { return nil }; let data = chunks.removeFirst(); bytes -= data.count; return data }
   mutating func clear() { chunks.removeAll(); bytes = 0 }

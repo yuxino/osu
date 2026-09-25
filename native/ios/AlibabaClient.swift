@@ -94,7 +94,7 @@ import Foundation
   }
   func append(_ data: Data) {
     guard active && !finishRequested else { return }
-    do { try queue.append(data); flush() } catch { fail(.overload) }
+    queue.append(data); flush()
   }
   // Capture stops at the caller. Only already queued audio may drain before finish.
   func finish(completion: @escaping (Bool) -> Void) {
