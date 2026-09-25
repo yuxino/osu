@@ -1,9 +1,9 @@
 import ActivityKit
 import Foundation
 
-// Legacy cleanup: earlier experimental builds created the Live Activity in the
-// host process. End any leftovers at launch. Island sessions now belong to the
-// broadcast extension, whose activities the host cannot see or end.
+// Retirement cleanup: dynamic island builds up to 17 created the Live Activity
+// in the host process and could leave leftovers behind. End those at launch;
+// the mode itself is retired (docs/dynamic-island-retirement.md).
 @MainActor final class SubtitleActivity {
   init() {
     let abandoned = Activity<SubtitleActivityAttributes>.activities

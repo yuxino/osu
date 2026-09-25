@@ -61,11 +61,9 @@ final class MimiPrototypeController: UIViewController {
   private let diagnosticFeedback = UILabel()
   private var copyDiagnosticsButton: UIButton!
   private var pipButton: UIButton!
-  private let islandUnavailableMessage = "实时活动只能由前台 App 创建，收音扩展无法代为创建；独立灵动岛字幕暂不可用，请使用画中画。"
-  private let displayMode = UISegmentedControl(items: ["画中画", "灵动岛"])
+  // Retired dynamic island builds (≤17) could leave host-visible activities;
+  // end those leftovers at launch. See docs/dynamic-island-retirement.md.
   private let islandCleanup = SubtitleActivity()
-  private var prefersIsland = UserDefaults.standard.bool(forKey: "osu.dynamicIsland")
-  private var usesIsland: Bool { prefersIsland && engine == .alibaba && !testingSample }
   private var capture = CaptureReadiness()
   private var lastCaptureState = CaptureReadiness.State.idle
   private var mediaActive = false
@@ -226,14 +224,10 @@ final class MimiPrototypeController: UIViewController {
 
     let stack = pageStack(in: view, top: 32, below: header, above: footer); stack.spacing = 24
     phaseTitle.font = UIFont.preferredFont(forTextStyle: .title1); phaseTitle.adjustsFontForContentSizeCategory = true; phaseTitle.numberOfLines = 0; phaseTitle.accessibilityTraits.insert(.header); stack.addArrangedSubview(phaseTitle)
-    status.numberOfLines = 0; status.font = UIFont.preferredFont(forTextStyle: .subheadline); status.adjustsFontForContentSizeCategory = true; status.textColor = .secondaryLabel; status.text = usesIsland ? islandUnavailableMessage : "开启后回到视频 App，字幕会逐句出现在小窗里。"; stack.addArrangedSubview(status); stack.setCustomSpacing(10, after: phaseTitle)
+    status.numberOfLines = 0; status.font = UIFont.preferredFont(forTextStyle: .subheadline); status.adjustsFontForContentSizeCategory = true; status.textColor = .secondaryLabel; status.text = "开启后回到视频 App，字幕会逐句出现在小窗里。"; stack.addArrangedSubview(status); stack.setCustomSpacing(10, after: phaseTitle)
     configureChoice(sourceButton); configureChoice(targetButton)
     languageRow.spacing = 10; languageRow.addArrangedSubview(sourceButton); languageRow.addArrangedSubview(targetButton)
     updateLanguageLayout(); stack.addArrangedSubview(languageRow)
-    displayMode.selectedSegmentIndex = prefersIsland ? 1 : 0
-    displayMode.accessibilityIdentifier = "home.displayMode"
-    displayMode.addTarget(self, action: #selector(displayModeChanged), for: .valueChanged)
-    stack.addArrangedSubview(displayMode)
     let previewTitle = label("字幕预览", size: 15, weight: .medium); previewTitle.textColor = .secondaryLabel
     originalButton = button("", #selector(toggleOriginal)); originalButton.configuration = .plain(); originalButton.tintColor = .label; originalButton.configuration?.imagePadding = 6; originalButton.configuration?.preferredSymbolConfigurationForImage = .init(pointSize: 14); originalButton.accessibilityIdentifier = "home.original"
     originalButton.setContentHuggingPriority(.required, for: .horizontal)
@@ -266,7 +260,6 @@ final class MimiPrototypeController: UIViewController {
     languageRow.distribution = largeText ? .fill : .fillEqually
   }
   @objc private func primaryPressed() {
-    if !running && !startPending && usesIsland { setStatus(islandUnavailableMessage); return }
     if finishing { return }
     if running && !capture.connected && !testingSample {
       broadcastRequested = true
@@ -279,13 +272,6 @@ final class MimiPrototypeController: UIViewController {
     else if engine == .alibaba && (try? readCloudCredential()) == nil { configureCloudKey() }
     else if engine == .apple && pairState == .needsDownload { prepareLanguages() }
     else { startPressed() }
-  }
-  @objc private func displayModeChanged() {
-    guard !running && !startPending else { return }
-    prefersIsland = displayMode.selectedSegmentIndex == 1
-    UserDefaults.standard.set(prefersIsland, forKey: "osu.dynamicIsland")
-    setStatus(prefersIsland ? islandUnavailableMessage : "开启后回到视频 App，字幕会逐句出现在小窗里。")
-    updateControls()
   }
   @objc private func showPicture() { guard running && mediaActive && !finishing && !testingSample else { return }; picture.start() }
   private func openBroadcastPicker() {
@@ -460,11 +446,8 @@ final class MimiPrototypeController: UIViewController {
     let busy = running || startPending || downloading
     cloudTestSection.isHidden = engine != .alibaba
     localRefreshButton.isHidden = engine != .apple; localRefreshButton.isEnabled = !busy
-    displayMode.isEnabled = !busy
-    displayMode.setEnabled(engine == .alibaba, forSegmentAt: 1)
-    displayMode.selectedSegmentIndex = prefersIsland && engine == .alibaba ? 1 : 0
-    originalSwitch.isEnabled = (!usesIsland || !busy) && (engine == .alibaba || !selection.target.isEmpty)
-    originalHint.text = usesIsland && busy ? "停止后可更改原文显示。" : (originalSwitch.isEnabled ? "在译文下方显示原文。" : "当前只显示原文，选择字幕语言后可使用此选项。")
+    originalSwitch.isEnabled = (engine == .alibaba || !selection.target.isEmpty) && (engine == .alibaba || !busy)
+    originalHint.text = originalSwitch.isEnabled ? "在译文下方显示原文。" : "当前只显示原文，选择字幕语言后可使用此选项。"
     sampleButton.isEnabled = !busy && ["auto", "ja"].contains(selection.source) && AlibabaProtocol.valid(source: selection.source, target: selection.target)
     sampleButton.configuration?.title = selection.source == "auto" ? "测试自动识别" : "测试日语同传"
     longSampleButton.isEnabled = sampleButton.isEnabled
@@ -500,7 +483,7 @@ final class MimiPrototypeController: UIViewController {
     sourceButton.configuration?.subtitle = selection.source == "auto" ? "声音 · 可手动指定" : "声音"
     targetButton.configuration?.title = selection.target.isEmpty ? "仅原文" : LanguageSelection.display(selection.target)
     targetButton.configuration?.subtitle = "字幕"
-    pipButton.isHidden = usesIsland || !running || testingSample || finishing || !mediaActive || picture.active
+    pipButton.isHidden = !running || testingSample || finishing || !mediaActive || picture.active
     serviceHint.text = engine == .alibaba ? "阿里云同传 · 音频上传北京并计费" : "Apple 本地 · 音频留在设备上"
     if engine == .apple && !pairState.canStart { serviceHint.text = pairState.message }
 
@@ -623,10 +606,6 @@ final class MimiPrototypeController: UIViewController {
         case "connecting": self.capture.connectionStarted()
         case "connected":
           self.capture.connectionReady(at: now); self.updateCaptureStatus()
-          if self.usesIsland {
-            self.broadcastRequested = false; self.endCaptureHandoff(); self.updateControls()
-            return
-          }
           if self.engine == .alibaba { self.connectCloud() }
           else { self.startRecognition() }
           guard self.running else { return }
@@ -652,15 +631,13 @@ final class MimiPrototypeController: UIViewController {
       case .schedule:
         DispatchQueue.main.async { [weak self] in
           guard let self, self.generation == epoch else { delivery.cancel(); return }
-          while let data = delivery.next() { if !self.usesIsland { self.consume(data) } }
+          while let data = delivery.next() { self.consume(data) }
         }
       }
     }
   }
   private func updateCaptureStatus() {
     guard !testingSample else { return }
-    // Island mode shows status in the Live Activity itself; skip host capture churn.
-    if usesIsland && capture.connected { return }
     let state = capture.state(at: ProcessInfo.processInfo.systemUptime)
     guard state != lastCaptureState else { return }
     lastCaptureState = state; log.record("capture", state.rawValue); setStatus(state.message); updateControls()
@@ -710,15 +687,8 @@ final class MimiPrototypeController: UIViewController {
     }
     generation += 1; bindReceiver()
     do {
-      receiver.islandConfiguration = nil
-      if usesIsland {
-        // The broadcast extension creates and owns its own Live Activity; the
-        // host only hands over credential and language configuration after auth.
-        guard let key = try readCloudCredential() else { throw IslandConfiguration.Failure.invalid }
-        receiver.islandConfiguration = try JSONEncoder().encode(IslandConfiguration(key: MimiWire.key, credential: key, source: selection.source, target: selection.target, showsOriginal: picture.showsOriginal))
-      }
       if !testingSample { try receiver.start() }
-    } catch { log.record("transport", "start_failed", error: error); receiver.islandConfiguration = nil; receiver.stop(); cloud?.stop(); cloud = nil; testingSample = false; updateControls(); setStatus(usesIsland ? "无法准备灵动岛字幕，请检查阿里云密钥后重试。" : "无法准备收音，错误已写入诊断。"); return }
+    } catch { log.record("transport", "start_failed", error: error); receiver.stop(); cloud?.stop(); cloud = nil; testingSample = false; updateControls(); setStatus("无法准备收音，错误已写入诊断。"); return }
     capture.start(); lastCaptureState = .idle; running = true; sourceFinals = 0; translationFinals = 0; cloudBytes = 0; receivedFrames = 0; seconds = 0; peak = 0; recognitionUpdates = 0; translationUpdates = 0; recognitionRestarts = 0; translationMS = 0; newest = ""; lastTranslated = ""; translationBusy = false; sessionStarted = Date(); lastAudio = .distantPast; lastJournal = .distantPast
     if !testingSample { broadcastRequested = true; beginCaptureHandoff() }
     transcript.text = "原文等待中"; translation.text = selection.target.isEmpty ? "仅显示原文" : "译文等待中"
@@ -854,7 +824,6 @@ final class MimiPrototypeController: UIViewController {
   private func stopSession(reason: String) {
     // Save idle state and close the socket before giving up background execution.
     defer { endFinishBackgroundTask() }
-    receiver.islandConfiguration = nil
     let wasPending = startPending
     endCaptureHandoff()
     broadcastRequested = false; lastPickerRequest = .distantPast

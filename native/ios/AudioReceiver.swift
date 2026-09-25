@@ -9,11 +9,6 @@ final class AudioReceiver {
   var onAudio: ((Data) -> Void)?
   // Callbacks fire on the receiver queue; hop queues before calling back in.
   var onEvent: ((String, Error?, [String: Double]) -> Void)?
-  private var configuration: Data?
-  var islandConfiguration: Data? {
-    get { queue.sync { configuration } }
-    set { queue.sync { configuration = newValue } }
-  }
   private var authenticated = false
   private var lastStatistics = Date.distantPast
   private var rebindAttempts = 0
@@ -112,7 +107,7 @@ final class AudioReceiver {
       guard let self, self.peer === c else { return }
       do {
         for packet in try self.decoder.append(data ?? Data()) {
-          if !self.authenticated { self.authenticated = true; if let configuration = self.configuration { self.configuration = nil; c.send(content: configuration + Data([10]), completion: .contentProcessed { _ in }) }; self.onEvent?("connected", nil, [:]) }
+          if !self.authenticated { self.authenticated = true; self.onEvent?("connected", nil, [:]) }
           if let event = packet.event { self.onEvent?(event, nil, [:]) }
           if Date().timeIntervalSince(self.lastStatistics) >= 5 {
             self.lastStatistics = Date(); self.onEvent?("extension_counters", nil, ["dropped": packet.dropped, "conversionFailures": packet.conversionFailures])

@@ -41,8 +41,6 @@ React Native, TypeScript, and native iOS audio capture. See [building and checks
 
 [MIT](LICENSE)
 
-## Dynamic Island mode (unavailable)
+## Dynamic Island (retired)
 
-Independent island subtitles need the broadcast process to hold a Live Activity, and iOS rules this out both ways: an extension cannot look up the app-created activity (process-scoped), and `Activity.request` from an extension fails with `ActivityAuthorizationError.visibility` because only a foreground app may start one. Both failures are confirmed on a physical device. Osu blocks the mode before opening broadcast and explains how to switch to PiP.
-
-Reviving the mode would require updating the app-created activity through APNs pushes, which needs a backend. See the [verification record](docs/acceptance/2026-09-25-island.md).
+The independent Dynamic Island subtitle mode was retired: iOS requires a foreground process to start a Live Activity, which the broadcast process can never be, and the extension cannot see the app-created activity either. Both failures are device-confirmed; see the [retirement report](docs/dynamic-island-retirement.md). Reviving the mode requires an APNs-based backend.
