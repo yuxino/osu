@@ -145,10 +145,10 @@ check(lyrics.current == nil && lyrics.previous == nil, "restart clears previous-
 lyrics.update("无编号首句", id: "", final: true)
 check(!lyrics.update("无编号后续句", id: "", final: true) && lyrics.current?.text == "无编号后续句", "missing IDs degrade to live text instead of freezing after a final")
 
-let islandConfiguration = IslandConfiguration(key: "wire", activityID: "activity", credential: "test-credential", source: "auto", target: "zh", showsOriginal: true)
+let islandConfiguration = IslandConfiguration(key: "wire", credential: "test-credential", source: "auto", target: "zh", showsOriginal: true)
 let islandData = try JSONEncoder().encode(islandConfiguration)
 check(try IslandConfiguration.decode(islandData, key: "wire").showsOriginal, "island handoff preserves the original-text preference")
-for invalid in [Data(islandData.dropLast()), try JSONEncoder().encode(IslandConfiguration(key: "wrong", activityID: "activity", credential: "test-credential", source: "auto", target: "zh", showsOriginal: false)), try JSONEncoder().encode(IslandConfiguration(key: "wire", activityID: "activity", credential: "test-credential", source: "invalid", target: "zh", showsOriginal: false))] {
+for invalid in [Data(islandData.dropLast()), try JSONEncoder().encode(IslandConfiguration(key: "wrong", credential: "test-credential", source: "auto", target: "zh", showsOriginal: false)), try JSONEncoder().encode(IslandConfiguration(key: "wire", credential: "test-credential", source: "invalid", target: "zh", showsOriginal: false))] {
   var rejected = false
   do { _ = try IslandConfiguration.decode(invalid, key: "wire") } catch { rejected = true }
   check(rejected, "invalid or unauthenticated island configuration is rejected")

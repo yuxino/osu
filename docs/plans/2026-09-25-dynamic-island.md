@@ -1,10 +1,35 @@
 # Dynamic Island subtitles
 
-**Superseded acceptance status:** device logs subsequently confirmed that the
-broadcast-side activity lookup fails. Independent mode is now blocked before
-broadcast begins. See [the failure and simulator test record](../acceptance/2026-09-25-island.md).
-The original design and earlier checks below are retained as history, not evidence
-that independent mode works.
+**Status:** the first implementation failed on a physical device — the broadcast
+extension cannot look up a host-created activity, because `Activity.activities`
+is process-scoped. The redesign lets the broadcast extension create and own its
+own Live Activity, so no identifier crosses the process boundary. Independent
+mode is re-enabled as an experimental feature; see [the failure, redesign and
+simulator record](../acceptance/2026-09-25-island.md). The first design and its
+checks below are retained as history.
+
+## Redesign (extension-owned activity)
+
+- When the authenticated configuration arrives, the ReplayKit extension requests
+  its own activity, updates it per translated sentence, and ends it on every
+  stop path. `IslandConfiguration` no longer carries an activity identifier.
+- The host never creates an activity in island mode. It validates the credential
+  and hands languages and the original-text preference to the extension after
+  broadcast authentication.
+- If the extension cannot create the activity (real-time activities disabled, or
+  ActivityKit refusing a request from the extension sandbox), the broadcast ends
+  immediately with guidance to switch to PiP.
+- Apple documents updating a Live Activity from an app extension; starting one
+  from a broadcast upload extension is undocumented. Whether `Activity.request`
+  works there is exactly what device validation decides.
+- Orphan risk: if the extension process dies without ending its activity, the
+  host cannot see or end it. Content shows stale after 15 seconds and the system
+  reclaims it on its own schedule.
+- The simulator-side pre-broadcast block and the two-process lookup probe are
+  retired: the design no longer depends on cross-process lookup, so the probe
+  guards nothing.
+
+## First design (superseded)
 
 The requested mode shows translated app audio in Dynamic Island, with the current
 sentence and optional original text in the expanded and Lock Screen presentations.
@@ -29,7 +54,7 @@ The existing monochrome interface and default PiP mode remain in use.
 - Closing the host connection, stopping broadcast, ending the activity, or provider
   failure stops the session. End the activity immediately to remove subtitle text.
 
-## Validation boundary
+## First-design validation boundary (superseded)
 
 The SDK permits compiling ActivityKit into a broadcast extension. That alone does
 not establish that the extension can discover and update a host-created activity

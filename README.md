@@ -41,8 +41,8 @@ React Native, TypeScript, and native iOS audio capture. See [building and checks
 
 [MIT](LICENSE)
 
-## Dynamic Island mode (unavailable)
+## Dynamic Island mode (experimental)
 
-The independent Dynamic Island mode failed on a physical device: the broadcast process could not discover the host-created Live Activity. The current code blocks this mode before requesting broadcast permission and explains how to switch to PiP, instead of repeatedly triggering a system broadcast error.
+The independent Dynamic Island mode is re-enabled with a new design: the broadcast process creates and owns its own Live Activity, so no subtitle state crosses a process boundary. Starting a Live Activity from a broadcast extension is undocumented; if creation fails, the broadcast ends immediately and explains how to switch to PiP.
 
-The island and Lock Screen UI prototype remains for development. Passing a single-process simulator test is not evidence of independent background operation. See the [verification record](docs/acceptance/2026-09-25-island.md).
+Passing simulator tests is not evidence of independent background operation. See the [verification record](docs/acceptance/2026-09-25-island.md).
