@@ -9,7 +9,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yuxino.osu",
-      "buildNumber": "15",
+      "buildNumber": "16",
       "infoPlist": {
         "CFBundleDisplayName": "Osu"
       }
