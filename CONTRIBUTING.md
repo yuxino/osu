@@ -17,7 +17,7 @@ cd ..
 npm run ios:device
 ```
 
-On the first build, select your development team for the app and broadcast extension in Xcode. `ios:device` creates a Release app with JavaScript bundled, so it runs without a development server. The native modules require a standalone app; Expo Go is not supported.
+On the first build, select your development team for the app, broadcast extension, and OsuSubtitles widget extension in Xcode. `ios:device` creates a Release app with JavaScript bundled, so it runs without a development server. The native modules require a standalone app; Expo Go is not supported.
 
 The deployment target is iOS 18. Apple on-device translation requires iOS 26; earlier versions can use supported local speech recognition without translation, or Alibaba mode.
 

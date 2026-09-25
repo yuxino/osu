@@ -40,3 +40,9 @@ Osu does not save audio or subtitles; video and microphone samples are discarded
 React Native, TypeScript, and native iOS audio capture. See [building and checks](CONTRIBUTING.md), the [Alibaba guide](docs/alibaba.md), and [language support and diagnostics](docs/languages-and-diagnostics.md).
 
 [MIT](LICENSE)
+
+## Dynamic Island mode (experimental)
+
+The home screen now offers Picture in Picture and Dynamic Island. The new mode currently supports Alibaba only: a short translation in the compact island, the current sentence when expanded, and a Lock Screen Live Activity. Choose whether to show the original text before starting. Devices without Dynamic Island get the Lock Screen presentation; Apple local mode continues to use PiP.
+
+Expansion and refresh timing are controlled by iOS; long sentences may be truncated. Current subtitles are handed to the system Live Activity and removed when the session stops. Continuous updates from the independent broadcast process still require physical-device acceptance. The synthetic audio tests in Settings continue to use the original PiP path.

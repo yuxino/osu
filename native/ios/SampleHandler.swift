@@ -15,6 +15,10 @@ final class SampleHandler: RPBroadcastSampleHandler {
   private var lastHeartbeat = Date.distantPast
   private var heartbeatDue = false
   private var stopped = false
+  private var configurationBytes = Data()
+  private var islandRequested = false
+  private var island: BroadcastIslandSession?
+  private let islandDelivery = PCMDeliveryBuffer()
   private var dropped = 0
   private var conversionFailures = 0
   private var frames = 0
@@ -58,16 +62,40 @@ final class SampleHandler: RPBroadcastSampleHandler {
   }
 
   private func watchHost(_ c: NWConnection) {
-    c.receive(minimumIncompleteLength: 1, maximumLength: 128) { [weak self] _, _, complete, error in
+    c.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] data, _, complete, error in
       guard let self, !self.stopped else { return }
+      if let data, !data.isEmpty {
+        self.configurationBytes.append(data)
+        guard self.configurationBytes.count <= 8192, !self.islandRequested else { self.end("字幕配置无效，请重新开始。"); return }
+        if let newline = self.configurationBytes.firstIndex(of: 10) {
+          do {
+            let configuration = try IslandConfiguration.decode(Data(self.configurationBytes.prefix(upTo: newline)), key: MimiWire.key)
+            self.configurationBytes.removeAll(); self.islandRequested = true
+            self.pump?.cancel(); self.pump = nil; self.backlog.clear(); self.events.removeAll()
+            Task { @MainActor [weak self] in
+              guard let self else { return }
+              do {
+                let session = try BroadcastIslandSession(configuration: configuration)
+                session.onFailure = { [weak self] in self?.queue.async { [weak self] in self?.end("灵动岛字幕已结束，请回到 Osu 检查实时活动权限、网络和阿里云配置。") } }
+                self.queue.async {
+                  guard !self.stopped else { Task { @MainActor in session.stop() }; return }
+                  self.island = session
+                  let delivery = self.islandDelivery
+                  Task { @MainActor in while let data = delivery.next() { session.append(data) } }
+                }
+              } catch { self.queue.async { self.end("无法连接灵动岛字幕，请回到 Osu 重新开始。") } }
+            }
+          } catch { self.end("字幕配置无效，请重新开始。"); return }
+        }
+      }
       if complete || error != nil { self.log.record("transport", "host_closed", error: error); self.end("字幕会话已停止。") }
       else { self.watchHost(c) }
     }
   }
 
-  override func broadcastPaused() { queue.async { self.log.record("broadcast", "paused"); self.sendEvent("paused") } }
-  override func broadcastResumed() { queue.async { self.log.record("broadcast", "resumed"); self.sendEvent("resumed") } }
-  override func broadcastFinished() { queue.async { self.log.record("broadcast", "finished"); self.stopped = true; self.ready = false; self.pump?.cancel(); self.pump = nil; self.backlog.clear(); self.connection?.cancel(); self.connection = nil } }
+  override func broadcastPaused() { queue.async { self.log.record("broadcast", "paused"); self.sendEvent("paused"); if let session = self.island { Task { @MainActor in session.pause(true) } } } }
+  override func broadcastResumed() { queue.async { self.log.record("broadcast", "resumed"); self.sendEvent("resumed"); if let session = self.island { Task { @MainActor in session.pause(false) } } } }
+  override func broadcastFinished() { queue.async { self.log.record("broadcast", "finished"); self.stopIsland(); self.stopped = true; self.ready = false; self.pump?.cancel(); self.pump = nil; self.backlog.clear(); self.connection?.cancel(); self.connection = nil } }
 
   private func startPump() {
     let timer = DispatchSource.makeTimerSource(queue: queue); pump = timer
@@ -103,6 +131,18 @@ final class SampleHandler: RPBroadcastSampleHandler {
         if conversionFailures == 1 { log.record("audio", "conversion_failed", error: error); sendEvent("conversion_failed") }; return
       }
       let data = Data(bytes: samples, count: Int(output.frameLength) * 2)
+      if islandRequested {
+        switch islandDelivery.append(data) {
+        case .buffered, .closed: break
+        case .overflow: end("字幕处理跟不上播放速度，请重新开始。")
+        case .schedule:
+          let delivery = islandDelivery
+          // The queue owns the session reference; the client runs on MainActor.
+          guard let session = island else { return }
+          Task { @MainActor in while let data = delivery.next() { session.append(data) } }
+        }
+        return
+      }
       do { try backlog.append(data) }
       catch { log.record("audio", "buffer_overflow"); end("音频处理跟不上播放速度，已停止收音。请回到 Osu 重新开始。"); return }
       frames += 1
@@ -112,12 +152,12 @@ final class SampleHandler: RPBroadcastSampleHandler {
   }
 
   private func sendEvent(_ event: String) {
-    guard !stopped else { return }
+    guard !stopped, !islandRequested else { return }
     guard events.count < 16 else { end("收音状态传输中断，请重新开始。"); return }
     events.append(event); drain()
   }
   private func drain(flush: Bool = false) {
-    guard !pending, ready, !stopped, let connection else { return }
+    guard !islandRequested, !pending, ready, !stopped, let connection else { return }
     var object: [String: Any] = ["key": MimiWire.key, "dropped": dropped, "conversionFailures": conversionFailures]
     if !events.isEmpty { object["event"] = events.removeFirst() }
     else if heartbeatDue { object["event"] = "heartbeat"; heartbeatDue = false }
@@ -131,8 +171,12 @@ final class SampleHandler: RPBroadcastSampleHandler {
       else { self.drain() }
     })
   }
+  private func stopIsland() {
+    islandDelivery.cancel()
+    if let session = island { island = nil; Task { @MainActor in session.stop() } }
+  }
   private func end(_ message: String) {
-    guard !stopped else { return }; log.record("broadcast", "ended"); stopped = true; ready = false; pump?.cancel(); pump = nil; backlog.clear(); connection?.cancel()
+    guard !stopped else { return }; log.record("broadcast", "ended"); stopIsland(); stopped = true; ready = false; pump?.cancel(); pump = nil; backlog.clear(); connection?.cancel()
     finishBroadcastWithError(NSError(domain: "MimiPrototype", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
   }
 }

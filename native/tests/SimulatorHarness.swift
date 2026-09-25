@@ -17,6 +17,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
   private let sessionFinish = SessionFinishFixture()
   private let endurance = StreamEnduranceFixture()
   private let sample = CloudSampleTest()
+  private let islandFixture = IslandFixture()
   private var completed = false
   private let queue = DispatchQueue(label: "mimi.simulator.tests")
   func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
@@ -26,7 +27,8 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     let backgroundFinish = arguments.contains("--verify-background-finish") || arguments.contains("--verify-background-timeout")
     let stream = arguments.contains("--verify-stream-smoke") || arguments.contains("--verify-stream-endurance")
     let motion = arguments.contains("--verify-motion") || arguments.contains("--verify-reduced-motion")
-    if motion { w.rootViewController = UIViewController() }
+    if arguments.contains("--verify-island") { w.rootViewController = UIViewController() }
+    else if motion { w.rootViewController = UIViewController() }
     else if arguments.contains("--verify-interactions") || arguments.contains("--interactions-ui") { w.rootViewController = interactions.controller() }
     else if arguments.contains("--broadcast-ui") { w.rootViewController = cloudUI.controller(ready: true, systemPicker: true) }
     else if stream { w.rootViewController = endurance.controller() }
@@ -34,6 +36,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     else if arguments.contains("--lyrics-ui") { w.rootViewController = LyricsDemoController() }
     else { w.rootViewController = arguments.contains("--capture-ui") || arguments.contains("--verify-capture-start") ? cloudUI.controller(ready: true) : (arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController()) }
     w.makeKeyAndVisible(); window = w
+    if arguments.contains("--verify-island") { islandFixture.run { [weak self] ok, result in self?.finish(ok, result) } }
     if arguments.contains("--broadcast-ui") {
       func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap { descendants($0) } }
       let events = descendants(w.rootViewController!.view).compactMap { $0 as? RPSystemBroadcastPickerView }.flatMap { $0.subviews.compactMap { $0 as? UIButton } }.map { $0.allControlEvents.rawValue }

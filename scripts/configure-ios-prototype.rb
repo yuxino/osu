@@ -22,11 +22,17 @@ FileUtils.cp(File.join(root, 'assets/brand', character_name), native)
 character_ref = group.files.find { |f| f.path == character_name } || group.new_file(character_name)
 host.resources_build_phase.add_file_reference(character_ref) unless host.resources_build_phase.files_references.include?(character_ref)
 extension = project.targets.find { |t| t.name == 'MimiBroadcast' } || project.new_target(:app_extension, 'MimiBroadcast', :ios, '18.0')
+widget = project.targets.find { |t| t.name == 'OsuSubtitles' } || project.new_target(:app_extension, 'OsuSubtitles', :ios, '18.0')
+FileUtils.cp(File.join(root, 'native/widget/SubtitleWidget.swift'), native)
 files = Dir[File.join(native, '*.{swift,m}')]
 files.each do |file|
  name = File.basename(file)
  ref = group.files.find { |f| f.path == name } || group.new_file(name)
  targets = name == 'SampleHandler.swift' ? [extension] : ['MimiWire.swift', 'DiagnosticStore.swift', 'PCMBacklog.swift'].include?(name) ? [host, extension] : [host]
+ targets = [host, extension, widget] if name == 'SubtitleActivityAttributes.swift'
+ targets = [host, extension] if ['IslandConfiguration.swift', 'AlibabaProtocol.swift', 'AlibabaClient.swift', 'LyricTrack.swift'].include?(name)
+ targets = [extension] if name == 'BroadcastIslandSession.swift'
+ targets = [widget] if name == 'SubtitleWidget.swift'
  targets.each { |t| t.source_build_phase.add_file_reference(ref) unless t.source_build_phase.files_references.include?(ref) }
 end
 team = host.build_configurations.map { |c| c.build_settings['DEVELOPMENT_TEAM'] }.compact.first
@@ -34,6 +40,13 @@ extension.build_configurations.each do |c|
  c.build_settings.merge!({'PRODUCT_NAME'=>'MimiBroadcast','PRODUCT_MODULE_NAME'=>'MimiBroadcast','PRODUCT_BUNDLE_IDENTIFIER'=>'com.yuxino.osu.MimiBroadcast','INFOPLIST_FILE'=>'MimiPrototype/Broadcast-Info.plist','GENERATE_INFOPLIST_FILE'=>'NO','SWIFT_VERSION'=>'5.0','IPHONEOS_DEPLOYMENT_TARGET'=>'18.0','TARGETED_DEVICE_FAMILY'=>'1,2','CODE_SIGN_STYLE'=>'Automatic','SKIP_INSTALL'=>'YES','APPLICATION_EXTENSION_API_ONLY'=>'YES','MARKETING_VERSION'=>version,'CURRENT_PROJECT_VERSION'=>build_number,'SWIFT_OPTIMIZATION_LEVEL'=> c.name == 'Release' ? '-O' : '-Onone'})
  c.build_settings['DEVELOPMENT_TEAM'] = team if team
 end
+widget.build_configurations.each do |c|
+ c.build_settings.merge!({'PRODUCT_NAME'=>'OsuSubtitles','PRODUCT_BUNDLE_IDENTIFIER'=>'com.yuxino.osu.OsuSubtitles','INFOPLIST_FILE'=>'MimiPrototype/Widget-Info.plist','GENERATE_INFOPLIST_FILE'=>'NO','SWIFT_VERSION'=>'5.0','IPHONEOS_DEPLOYMENT_TARGET'=>'18.0','TARGETED_DEVICE_FAMILY'=>'1,2','CODE_SIGN_STYLE'=>'Automatic','SKIP_INSTALL'=>'YES','APPLICATION_EXTENSION_API_ONLY'=>'YES','MARKETING_VERSION'=>version,'CURRENT_PROJECT_VERSION'=>build_number})
+ c.build_settings['DEVELOPMENT_TEAM'] = team if team
+end
+widget_info = {'CFBundleDisplayName'=>'Osu Subtitles','CFBundleExecutable'=>'$(EXECUTABLE_NAME)','CFBundleIdentifier'=>'$(PRODUCT_BUNDLE_IDENTIFIER)','CFBundleInfoDictionaryVersion'=>'6.0','CFBundleName'=>'$(PRODUCT_NAME)','CFBundlePackageType'=>'XPC!','CFBundleShortVersionString'=>version,'CFBundleVersion'=>build_number,'NSExtension'=>{'NSExtensionPointIdentifier'=>'com.apple.widgetkit-extension'}}
+Xcodeproj::Plist.write_to_path(widget_info, File.join(native, 'Widget-Info.plist'))
+host.add_dependency(widget) unless host.dependencies.any? { |d| d.target == widget }
 host.build_configurations.each { |c| c.build_settings['IPHONEOS_DEPLOYMENT_TARGET']='18.0' }
 host.add_dependency(extension) unless host.dependencies.any? { |d| d.target == extension }
 phase = host.copy_files_build_phases.find { |p| p.name == 'Embed App Extensions' } || host.new_copy_files_build_phase('Embed App Extensions')
@@ -41,11 +54,15 @@ phase.dst_subfolder_spec = '13'
 unless phase.files_references.include?(extension.product_reference)
  f=phase.add_file_reference(extension.product_reference); f.settings={'ATTRIBUTES'=>['RemoveHeadersOnCopy']}
 end
+unless phase.files_references.include?(widget.product_reference)
+ f=phase.add_file_reference(widget.product_reference); f.settings={'ATTRIBUTES'=>['RemoveHeadersOnCopy']}
+end
 info = {'CFBundleDisplayName'=>'Osu Audio','CFBundleExecutable'=>'$(EXECUTABLE_NAME)','CFBundleIdentifier'=>'$(PRODUCT_BUNDLE_IDENTIFIER)','CFBundleInfoDictionaryVersion'=>'6.0','CFBundleName'=>'$(PRODUCT_NAME)','CFBundlePackageType'=>'XPC!','CFBundleShortVersionString'=>version,'CFBundleVersion'=>build_number,'NSExtension'=>{'NSExtensionPointIdentifier'=>'com.apple.broadcast-services-upload','NSExtensionPrincipalClass'=>'$(PRODUCT_MODULE_NAME).SampleHandler','RPBroadcastProcessMode'=>'RPBroadcastProcessModeSampleBuffer'}}
 Xcodeproj::Plist.write_to_path(info, File.join(native,'Broadcast-Info.plist'))
 info_path = File.join(ios,'osu/Info.plist')
 p = Xcodeproj::Plist.read_from_path(info_path)
 p['CFBundleDisplayName']='Osu'
+p['NSSupportsLiveActivities']=true
 p['CFBundleVersion']=build_number
 p['NSSpeechRecognitionUsageDescription']='将你主动共享的 App 声音转成本地字幕；不上传音频。'
 p['UIBackgroundModes'] = ((p['UIBackgroundModes'] || []) + ['audio']).uniq
