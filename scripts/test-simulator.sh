@@ -17,7 +17,7 @@ fi
 if [ -f "$SIM_DATA/Documents/background-finish-ready.json" ]; then
   mv "$SIM_DATA/Documents/background-finish-ready.json" "$SIM_DATA/Documents/background-finish-ready.previous.json"
 fi
-xcrun simctl launch "$SIM_DEVICE" com.yuxino.osu.SimulatorTests "$SIM_TEST_MODE"
+xcrun simctl launch --terminate-running-process "$SIM_DEVICE" com.yuxino.osu.SimulatorTests "$SIM_TEST_MODE"
 case "$SIM_TEST_MODE" in
   --verify-background-finish|--verify-background-timeout)
     python3 - "$SIM_DATA/Documents" <<'PY'

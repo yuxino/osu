@@ -1,5 +1,11 @@
 # Dynamic Island subtitles
 
+**Superseded acceptance status:** device logs subsequently confirmed that the
+broadcast-side activity lookup fails. Independent mode is now blocked before
+broadcast begins. See [the failure and simulator test record](../acceptance/2026-09-25-island.md).
+The original design and earlier checks below are retained as history, not evidence
+that independent mode works.
+
 The requested mode shows translated app audio in Dynamic Island, with the current
 sentence and optional original text in the expanded and Lock Screen presentations.
 The existing monochrome interface and default PiP mode remain in use.

@@ -61,6 +61,7 @@ final class MimiPrototypeController: UIViewController {
   private let diagnosticFeedback = UILabel()
   private var copyDiagnosticsButton: UIButton!
   private var pipButton: UIButton!
+  private let islandUnavailableMessage = "独立灵动岛字幕尚未通过后台验证，暂不可用。请切换为画中画；重复开始广播无法解决。"
   private let displayMode = UISegmentedControl(items: ["画中画", "灵动岛"])
   private let island = SubtitleActivity()
   private var prefersIsland = UserDefaults.standard.bool(forKey: "osu.dynamicIsland")
@@ -226,7 +227,7 @@ final class MimiPrototypeController: UIViewController {
 
     let stack = pageStack(in: view, top: 32, below: header, above: footer); stack.spacing = 24
     phaseTitle.font = UIFont.preferredFont(forTextStyle: .title1); phaseTitle.adjustsFontForContentSizeCategory = true; phaseTitle.numberOfLines = 0; phaseTitle.accessibilityTraits.insert(.header); stack.addArrangedSubview(phaseTitle)
-    status.numberOfLines = 0; status.font = UIFont.preferredFont(forTextStyle: .subheadline); status.adjustsFontForContentSizeCategory = true; status.textColor = .secondaryLabel; status.text = usesIsland ? "长按灵动岛查看字幕，锁屏也可查看。" : "开启后回到视频 App，字幕会逐句出现在小窗里。"; stack.addArrangedSubview(status); stack.setCustomSpacing(10, after: phaseTitle)
+    status.numberOfLines = 0; status.font = UIFont.preferredFont(forTextStyle: .subheadline); status.adjustsFontForContentSizeCategory = true; status.textColor = .secondaryLabel; status.text = usesIsland ? islandUnavailableMessage : "开启后回到视频 App，字幕会逐句出现在小窗里。"; stack.addArrangedSubview(status); stack.setCustomSpacing(10, after: phaseTitle)
     configureChoice(sourceButton); configureChoice(targetButton)
     languageRow.spacing = 10; languageRow.addArrangedSubview(sourceButton); languageRow.addArrangedSubview(targetButton)
     updateLanguageLayout(); stack.addArrangedSubview(languageRow)
@@ -266,6 +267,7 @@ final class MimiPrototypeController: UIViewController {
     languageRow.distribution = largeText ? .fill : .fillEqually
   }
   @objc private func primaryPressed() {
+    if !running && !startPending && usesIsland { setStatus(islandUnavailableMessage); return }
     if finishing { return }
     if running && !capture.connected && !testingSample {
       broadcastRequested = true
@@ -283,7 +285,7 @@ final class MimiPrototypeController: UIViewController {
     guard !running && !startPending else { return }
     prefersIsland = displayMode.selectedSegmentIndex == 1
     UserDefaults.standard.set(prefersIsland, forKey: "osu.dynamicIsland")
-    setStatus(prefersIsland ? "长按灵动岛查看字幕，锁屏也可查看。当前支持阿里云；没有灵动岛的设备仅显示锁屏字幕。" : "开启后回到视频 App，字幕会逐句出现在小窗里。")
+    setStatus(prefersIsland ? islandUnavailableMessage : "开启后回到视频 App，字幕会逐句出现在小窗里。")
     updateControls()
   }
   @objc private func showPicture() { guard running && mediaActive && !finishing && !testingSample else { return }; picture.start() }

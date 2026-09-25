@@ -41,8 +41,8 @@ React Native, TypeScript, and native iOS audio capture. See [building and checks
 
 [MIT](LICENSE)
 
-## Dynamic Island mode (experimental)
+## Dynamic Island mode (unavailable)
 
-The home screen now offers Picture in Picture and Dynamic Island. The new mode currently supports Alibaba only: a short translation in the compact island, the current sentence when expanded, and a Lock Screen Live Activity. Choose whether to show the original text before starting. Devices without Dynamic Island get the Lock Screen presentation; Apple local mode continues to use PiP.
+The independent Dynamic Island mode failed on a physical device: the broadcast process could not discover the host-created Live Activity. The current code blocks this mode before requesting broadcast permission and explains how to switch to PiP, instead of repeatedly triggering a system broadcast error.
 
-Expansion and refresh timing are controlled by iOS; long sentences may be truncated. Current subtitles are handed to the system Live Activity and removed when the session stops. Continuous updates from the independent broadcast process still require physical-device acceptance. The synthetic audio tests in Settings continue to use the original PiP path.
+The island and Lock Screen UI prototype remains for development. Passing a single-process simulator test is not evidence of independent background operation. See the [verification record](docs/acceptance/2026-09-25-island.md).

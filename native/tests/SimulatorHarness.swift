@@ -27,16 +27,18 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
     let backgroundFinish = arguments.contains("--verify-background-finish") || arguments.contains("--verify-background-timeout")
     let stream = arguments.contains("--verify-stream-smoke") || arguments.contains("--verify-stream-endurance")
     let motion = arguments.contains("--verify-motion") || arguments.contains("--verify-reduced-motion")
-    if arguments.contains("--verify-island") { w.rootViewController = UIViewController() }
+    if arguments.contains("--verify-island-in-process") || arguments.contains("--island-process-host") { w.rootViewController = UIViewController() }
     else if motion { w.rootViewController = UIViewController() }
     else if arguments.contains("--verify-interactions") || arguments.contains("--interactions-ui") { w.rootViewController = interactions.controller() }
+    else if arguments.contains("--verify-island-unavailable") { w.rootViewController = cloudUI.controller(ready: true) }
     else if arguments.contains("--broadcast-ui") { w.rootViewController = cloudUI.controller(ready: true, systemPicker: true) }
     else if stream { w.rootViewController = endurance.controller() }
     else if arguments.contains("--verify-session-finish") || backgroundFinish { w.rootViewController = sessionFinish.controller(systemBackground: backgroundFinish) }
     else if arguments.contains("--lyrics-ui") { w.rootViewController = LyricsDemoController() }
     else { w.rootViewController = arguments.contains("--capture-ui") || arguments.contains("--verify-capture-start") ? cloudUI.controller(ready: true) : (arguments.contains("--cloud-ui") ? cloudUI.controller() : MimiPrototypeController()) }
     w.makeKeyAndVisible(); window = w
-    if arguments.contains("--verify-island") { islandFixture.run { [weak self] ok, result in self?.finish(ok, result) } }
+    if arguments.contains("--island-process-host") { islandFixture.prepareProcessProbe() }
+    if arguments.contains("--verify-island-in-process") { islandFixture.run { [weak self] ok, result in self?.finish(ok, result) } }
     if arguments.contains("--broadcast-ui") {
       func descendants(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap { descendants($0) } }
       let events = descendants(w.rootViewController!.view).compactMap { $0 as? RPSystemBroadcastPickerView }.flatMap { $0.subviews.compactMap { $0 as? UIButton } }.map { $0.allControlEvents.rawValue }
@@ -57,6 +59,7 @@ final class SimulatorHarness: UIResponder, UIApplicationDelegate {
       captureStartup.run(controller: controller, fixture: cloudUI) { [weak self] ok, result in self?.finish(ok, result) }
     }
     if let controller = w.rootViewController as? MimiPrototypeController {
+      if arguments.contains("--verify-island-unavailable") { islandFixture.verifyUnavailableMode(controller, fixture: cloudUI) { [weak self] ok, result in self?.finish(ok, result) } }
       if arguments.contains("--verify-interactions") { interactions.run(controller) { [weak self] ok, result in self?.finish(ok, result) } }
       if stream { endurance.run(controller: controller, duration: arguments.contains("--verify-stream-endurance") ? 900 : 12) { [weak self] ok, result in self?.finish(ok, result) } }
       if arguments.contains("--verify-session-finish") { sessionFinish.run(controller: controller) { [weak self] ok, result in self?.finish(ok, result) } }

@@ -30,6 +30,18 @@ t.add_dependency(widget)
 phase = t.new_copy_files_build_phase('Embed App Extensions'); phase.dst_subfolder_spec = '13'
 phase.add_file_reference(widget.product_reference).settings = {'ATTRIBUTES'=>['RemoveHeadersOnCopy']}
 info_path = File.join(dir, 'Info.plist'); info = Xcodeproj::Plist.read_from_path(info_path); info['NSSupportsLiveActivities'] = true; Xcodeproj::Plist.write_to_path(info, info_path)
+probe = p.new_target(:application, 'IslandProcessProbe', :ios, '18.0')
+# CloudFixture contains UI fixtures as well as its in-memory socket; use the same
+# native source set as the harness so those fixture references resolve.
+probe_sources = sources.reject { |f| File.basename(f) == 'SimulatorHarness.swift' }
+probe_sources += [File.join(root, 'native/tests/IslandProcessProbe.swift')]
+probe_sources.each { |f| probe.source_build_phase.add_file_reference(g.new_file(f)) }
+probe.build_configurations.each do |c|
+ c.build_settings.merge!({'PRODUCT_NAME'=>'IslandProcessProbe','PRODUCT_BUNDLE_IDENTIFIER'=>'com.yuxino.osu.SimulatorTests.ProcessProbe','INFOPLIST_FILE'=>'Probe-Info.plist','GENERATE_INFOPLIST_FILE'=>'NO','SWIFT_VERSION'=>'5.0','IPHONEOS_DEPLOYMENT_TARGET'=>'18.0','TARGETED_DEVICE_FAMILY'=>'1,2','CODE_SIGN_IDENTITY'=>'-'})
+end
+probe_info = Xcodeproj::Plist.read_from_path(info_path)
+probe_info['CFBundleDisplayName'] = 'Osu Process Probe'
+Xcodeproj::Plist.write_to_path(probe_info, File.join(dir, 'Probe-Info.plist'))
 p.save
-scheme = Xcodeproj::XCScheme.new; scheme.add_build_target(t); scheme.set_launch_target(t); scheme.save_as(p.path, 'MimiSimulator', true)
+scheme = Xcodeproj::XCScheme.new; scheme.add_build_target(t); scheme.add_build_target(probe); scheme.set_launch_target(t); scheme.save_as(p.path, 'MimiSimulator', true)
 puts 'Configured isolated simulator harness using production native code.'

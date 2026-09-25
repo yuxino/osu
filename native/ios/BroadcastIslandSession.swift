@@ -1,9 +1,10 @@
 import ActivityKit
 import Foundation
 
-// Runs in ReplayKit's process, so subtitle updates do not depend on the host
-// staying awake or on a hidden PiP / silent audio keepalive.
+// Experimental broadcast-side pipeline. The current real extension cannot
+// discover the host activity; keep independent mode blocked until redesigned.
 @MainActor final class BroadcastIslandSession {
+  enum Failure: Error { case activityUnavailable }
   private let client: AlibabaClient
   private let activity: Activity<SubtitleActivityAttributes>
   private var state: SubtitleActivityAttributes.ContentState
@@ -15,14 +16,14 @@ import Foundation
   var onFailure: (() -> Void)?
 
   init(configuration: IslandConfiguration, makeClient: (() -> AlibabaClient)? = nil) throws {
-    client = makeClient?() ?? AlibabaClient()
     let activities = Activity<SubtitleActivityAttributes>.activities
     guard let activity = activities.first(where: { $0.id == configuration.activityID }) else {
       DiagnosticStore.shared.record("island", "activity_unavailable")
-      throw IslandConfiguration.Failure.invalid
+      throw Failure.activityUnavailable
     }
     DiagnosticStore.shared.record("island", "extension_attached")
     self.activity = activity
+    client = makeClient?() ?? AlibabaClient()
     state = .init(original: "", translated: "等待翻译", status: "正在连接", showsOriginal: configuration.showsOriginal)
     client.onReady = { [weak self] in self?.state.status = "正在听"; self?.dirty = true }
     client.onSource = { [weak self] text, id, final in

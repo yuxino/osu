@@ -83,7 +83,9 @@ final class SampleHandler: RPBroadcastSampleHandler {
                   let delivery = self.islandDelivery
                   Task { @MainActor in while let data = delivery.next() { session.append(data) } }
                 }
-              } catch { self.queue.async { self.end("无法连接灵动岛字幕，请回到 Osu 重新开始。") } }
+              } catch BroadcastIslandSession.Failure.activityUnavailable {
+                self.queue.async { self.end("此版本的独立灵动岛字幕暂不可用，请回到 Osu 切换为画中画。重复开始广播无法解决此问题。") }
+              } catch { self.queue.async { self.end("无法启动字幕服务，请回到 Osu 检查配置。") } }
             }
           } catch { self.end("字幕配置无效，请重新开始。"); return }
         }
