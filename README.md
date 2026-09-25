@@ -27,9 +27,9 @@ Osu transcribes and translates audio from other iPhone apps, then displays the c
 
 1. [Build and install](CONTRIBUTING.md), then add your Alibaba Cloud Model Studio API key for the Beijing region when prompted, or choose Apple local mode in settings.
 2. Tap **开始听** to open the system broadcast panel directly. Select **Osu Audio** and confirm **开始广播**.
-3. Return to your video app. Close the subtitle window or tap **停止** to stop listening.
+3. Return to your video app. Tap **停止** in Osu to stop listening.
 
-Keep the video in its original app: another app's Picture in Picture window can replace Osu's subtitles and end capture. Close iPhone Mirroring before starting a broadcast. App compatibility and long background sessions are still being tested.
+Keep the video in its original app. If another app's Picture in Picture window takes over the caption window, capture and translation continue and the caption window returns automatically once the other window closes. Close iPhone Mirroring before starting a broadcast. App compatibility and long background sessions are still being tested.
 
 ## Privacy
 

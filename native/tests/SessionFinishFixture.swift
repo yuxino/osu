@@ -2,8 +2,8 @@ import UIKit
 import Network
 
 // In-memory provider replies and authenticated loopback PCM drive the real UI,
-// receiver and client. PiP is unavailable on this simulator, so only its external
-// close callback is substituted. No ReplayKit, Keychain or cloud service is used.
+// receiver and client. PiP is unavailable on this simulator, so termination is
+// driven through the real 停止 button. No ReplayKit, Keychain or cloud service is used.
 @MainActor final class SessionFinishFixture {
   private let picture = SubtitlePicture()
   private let tasks = FixtureBackgroundTasks()
@@ -30,38 +30,40 @@ import Network
     Task { @MainActor in
       do {
         try await start(controller)
-        try closePicture()
-        // A second close callback must leave the first finalization intact.
-        picture.onClosed?()
-        guard tasks.hasFinish, !sockets.last!.closed else { throw failure("duplicate_close_cancelled_finish") }
+        try stopSession(controller)
+        // A transport close during finishing must leave the finalization intact.
+        connection?.cancel()
+        guard tasks.hasFinish, !sockets.last!.closed else { throw failure("duplicate_stop_cancelled_finish") }
         try await wait { self.sockets.last!.sentFinish == 1 }
         sockets.last!.confirmFinish()
         try await stopped(controller)
         guard picture.translated == "这是最后一句。" else { throw failure("last_translation_lost") }
-        results.append("confirmed_tail_and_duplicate_close")
+        results.append("confirmed_tail_and_duplicate_stop")
 
-        try await start(controller); try closePicture()
+        try await start(controller); try stopSession(controller)
         try await stopped(controller, timeout: 11)
         guard labels(in: controller.view).contains(where: { $0.contains("部分末句") }) else { throw failure("timeout_not_explained") }
         results.append("server_timeout")
 
-        try await start(controller); try closePicture()
+        try await start(controller); try stopSession(controller)
         guard let expired = tasks.finishExpiration else { throw failure("missing_expiration") }
         expired(); try await stopped(controller)
         results.append("system_expiration")
 
         try await start(controller); tasks.denyFinish = true
-        picture.onClosed?(); try await stopped(controller)
+        // The finish task is intentionally denied here, so skip the bounded-
+        // finish assertions and require only the immediate full stop.
+        try press("停止", in: controller.view); try await stopped(controller)
         guard sockets.last!.sentFinish == 0 else { throw failure("denied_task_kept_network_work") }
         tasks.denyFinish = false; results.append("background_task_denied")
 
-        try await start(controller); try closePicture()
+        try await start(controller); try stopSession(controller)
         guard let oldExpiration = tasks.finishExpiration else { throw failure("missing_cancel_expiration") }
         try press("立即结束", in: controller.view); try await stopped(controller)
         try await start(controller)
         oldExpiration()
         guard snapshot()["running"] as? Bool == true, !sockets.last!.closed else { throw failure("old_expiration_stopped_new_session") }
-        try closePicture(); try await wait { self.sockets.last!.sentFinish == 1 }
+        try stopSession(controller); try await wait { self.sockets.last!.sentFinish == 1 }
         sockets.last!.confirmFinish(); try await stopped(controller)
         results.append("cancel_restart_ignores_old_expiration")
         completion(true, results.joined(separator: ","))
@@ -89,7 +91,7 @@ import Network
                 // suspend immediately afterward, which is the behavior under test.
                 completion(valid, acknowledge ? "background_tail_confirmed_then_released" : "background_timeout_closed_then_released")
               }
-              try self.closePicture()
+              try self.stopSession(controller)
               if acknowledge {
                 try await Task.sleep(nanoseconds: 2_000_000_000)
                 self.sockets.last!.confirmFinish()
@@ -127,10 +129,10 @@ import Network
     }
     try await wait { self.sockets.count == count + 1 && self.sockets.last!.sentAudio == 1 && controller.presentedViewController == nil && self.snapshot()["running"] as? Bool == true }
   }
-  private func closePicture() throws {
-    picture.onClosed?()
+  private func stopSession(_ controller: MimiPrototypeController) throws {
+    try press("停止", in: controller.view)
     let state = snapshot()
-    guard tasks.hasFinish, state["captureState"] as? String == "finishing", state["running"] as? Bool == false, state["pip"] as? Bool == false, !sockets.last!.closed else { throw failure("close_not_bounded_or_snapshot_still_capturing") }
+    guard tasks.hasFinish, state["captureState"] as? String == "finishing", state["running"] as? Bool == false, state["pip"] as? Bool == false, !sockets.last!.closed else { throw failure("stop_not_bounded_or_snapshot_still_capturing state=\(state) hasFinish=\(tasks.hasFinish) closed=\(sockets.last?.closed ?? true) count=\(sockets.count)") }
   }
   private func stopped(_ controller: MimiPrototypeController, timeout: Double = 3) async throws {
     try await wait(timeout: timeout) { self.isStopped(controller) && self.captureClosed }

@@ -68,7 +68,6 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   }
   var onEvent: ((String, Error?) -> Void)?
   var onStatus: ((String) -> Void)?
-  var onClosed: (() -> Void)?
   private var frame: Int64 = 0
 
   override init() {
@@ -189,20 +188,28 @@ final class SubtitlePicture: NSObject, AVPictureInPictureSampleBufferPlaybackDel
   }
   func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
     guard pip === pictureInPictureController else { return }; starting = false
-    if stopping || !wantsPicture { pictureInPictureController.stopPictureInPicture(); return }
-    wantsPicture = false; onEvent?("started", nil); onStatus?("字幕小窗已开启")
+    if stopping { pictureInPictureController.stopPictureInPicture(); return }
+    onEvent?("started", nil); onStatus?("字幕小窗已开启")
   }
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
     guard pip === pictureInPictureController else { return }; starting = false
     if stopping { let restart = wantsPicture; releaseMedia(); if restart { start() }; return }
-    wantsPicture = false; onEvent?("failed", error); onStatus?("小窗启动失败，错误代码已写入诊断。")
+    // Transient failures (another video window active, session interrupted) are
+    // retried by the render timer until the window becomes possible again.
+    onEvent?("failed", error); onStatus?("字幕小窗暂时无法启动，收音继续；条件允许时自动恢复。")
   }
   func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
     guard pip === pictureInPictureController else { return }
     let programmatic = stopping; stopping = false; onEvent?("stopped", nil)
-    let restart = wantsPicture
-    timer?.invalidate(); timer = nil; releaseMedia(); preview.setNeedsDisplay()
-    if restart { start() } else if !programmatic { onClosed?() }
+    if programmatic {
+      timer?.invalidate(); timer = nil; releaseMedia(); preview.setNeedsDisplay()
+      return
+    }
+    // The window was taken over (another app's video PiP) or dismissed. Keep
+    // the media primed and re-acquire automatically; the render timer keeps
+    // frames flowing so restored content is immediate.
+    onStatus?("字幕小窗被其他视频小窗接管，收音继续；对方关闭后自动恢复。")
+    preview.setNeedsDisplay(); attemptStart()
   }
   func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) { completionHandler(false) }
 }

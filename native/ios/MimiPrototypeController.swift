@@ -101,7 +101,6 @@ final class MimiPrototypeController: UIViewController {
   private var heartbeat: Timer?
   private var lastAudio = Date.distantPast, lastRotation = Date(), sessionStarted = Date(), lastJournal = Date.distantPast
   private var translationBusy = false
-  private let pictureStoppedMessage = "字幕小窗已关闭，收音也已停止。iPhone 的视频小窗会替换字幕小窗；使用 Osu 时，请将视频留在原 App 内播放。"
 
   // The isolated simulator harness substitutes an in-memory socket and dummy key.
   // Normal app startup uses the fixed provider endpoint and device Keychain.
@@ -136,13 +135,20 @@ final class MimiPrototypeController: UIViewController {
       self?.log.record("pip", event, error: error)
       if event == "started" { self?.endCaptureHandoff() }; self?.updateControls()
     }
-    picture.onClosed = { [weak self] in self?.finishSession(reason: "pip_closed") }
     for name in [UIApplication.didEnterBackgroundNotification, UIApplication.didBecomeActiveNotification, AVAudioSession.interruptionNotification, UIContentSizeCategory.didChangeNotification] {
       observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
         guard let self else { return }
         if note.name == UIContentSizeCategory.didChangeNotification { self.picture.showStill(); return }
         if note.name == AVAudioSession.interruptionNotification {
-          if self.mediaActive && (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.began.rawValue { self.log.record("audio", "interrupted"); self.stopSession(reason: "audio_interrupted"); self.setStatus("系统中断了字幕会话，收音已停止。准备好了可重新开始。") }
+          // The broadcast and cloud session are independent of the render
+          // session; keep capture alive and let the window re-acquire itself.
+          let type = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init(rawValue:))
+          if type == .began {
+            self.log.record("audio", "interrupted")
+            if self.mediaActive { self.setStatus("音频被其他播放暂时接管，收音继续；字幕小窗会自动恢复。") }
+          } else if type == .ended, self.mediaActive {
+            try? AVAudioSession.sharedInstance().setActive(true)
+          }
         } else {
           let foreground = note.name == UIApplication.didBecomeActiveNotification
           self.log.record("app", foreground ? "foreground" : "background")
@@ -822,11 +828,11 @@ final class MimiPrototypeController: UIViewController {
       guard let self, self.finishing, self.generation == epoch else { return }
       self.log.record("cloud", "finish_background_expired")
       self.stopSession(reason: reason)
-      self.setStatus(reason == "pip_closed" ? self.pictureStoppedMessage + "部分末句可能未返回。" : "已停止，部分末句可能未返回。")
+      self.setStatus("已停止，部分末句可能未返回。")
     }
     guard finishBackgroundTask != .invalid else {
       log.record("cloud", "finish_background_unavailable"); stopSession(reason: reason)
-      setStatus(reason == "pip_closed" ? pictureStoppedMessage + "部分末句可能未返回。" : "已停止，部分末句可能未返回。")
+      setStatus("已停止，部分末句可能未返回。")
       return
     }
     endCaptureHandoff()
@@ -842,10 +848,6 @@ final class MimiPrototypeController: UIViewController {
       let completedSample = sample && reason == "sample_complete"
       if sample { self.log.record("cloud", completedSample ? (sampleOK ? "synthetic_sample_passed" : "synthetic_sample_incomplete") : "synthetic_sample_stopped", metrics: self.metrics) }
       self.stopSession(reason: reason)
-      if reason == "pip_closed" {
-        self.setStatus(self.pictureStoppedMessage + (confirmed ? "" : "部分末句可能未返回。"))
-        return
-      }
       self.setStatus(completedSample ? (sampleOK ? "测试完成，已收到完整原文和译文。" : "测试结束，末句未完整返回，可重试。") : (confirmed ? (reason == "broadcast_ended" ? "广播已停止，最后的字幕留在这里。" : (self.recognitionUpdates > 0 ? "已结束，最后的字幕留在这里。" : "已结束，收音已停止。")) : "已停止，部分末句可能未返回。"))
     }
   }
@@ -870,7 +872,7 @@ final class MimiPrototypeController: UIViewController {
     }
     if mediaActive { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation); mediaActive = false }
     log.record("session", reason, metrics: metrics); writeSnapshot(); updateControls(); updateCounts()
-    setStatus(reason == "pip_closed" ? pictureStoppedMessage : "已停止。准备好了就再开始。")
+    setStatus("已停止。准备好了就再开始。")
     refreshLanguages()
   }
   private func endFinishBackgroundTask() {
