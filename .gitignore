@@ -46,3 +46,4 @@ vendor/bundle/
 
 # Retained build caches outside generated native folders
 .build/
+ui-motion/
