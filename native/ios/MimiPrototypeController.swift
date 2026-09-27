@@ -32,6 +32,8 @@ final class MimiPrototypeController: UIViewController {
   private var keyButton: UIButton!
   private var localRefreshButton: UIButton!
   private var cloud: AlibabaClient?
+  private var cloudRetryWork: DispatchWorkItem?
+  private var cloudRecoveryAttempts = 0
   private let makeCloudClient: () -> AlibabaClient
   private let readCloudCredential: () throws -> String?
   private let saveCloudCredential: (String) throws -> Void
@@ -415,7 +417,7 @@ final class MimiPrototypeController: UIViewController {
           // The receiver and its queued audio already belong to this session.
           // Restarting it here would discard the first audio and invalidate callbacks.
           self.startPending = false; self.updateControls()
-          self.setStatus(self.capture.state(at: ProcessInfo.processInfo.systemUptime).message)
+          self.setStatus(self.cloudRecoveryAttempts > 0 ? "翻译连接已恢复，正在收音。" : self.capture.state(at: ProcessInfo.processInfo.systemUptime).message)
         }
       }
       client.onSource = { [weak self, weak client] text, id, final in
@@ -426,21 +428,46 @@ final class MimiPrototypeController: UIViewController {
       }
       client.onTranslation = { [weak self, weak client] text, id, final in
         guard let self, let client, self.cloud === client, self.running else { return }
+        self.cloudRecoveryAttempts = 0
         self.translationUpdates += 1; self.translation.text = text; self.picture.updateTranslation(text, id: id, final: final)
         if self.translationUpdates == 1 { self.log.record("cloud", "first_translation") }
         if final { self.translationFinals += 1; self.log.record("cloud", "translation_final") }
       }
-      client.onMetric = { [weak self, weak client] bytes in guard let self, let client, self.cloud === client else { return }; self.cloudBytes += bytes }
+      client.onMetric = { [weak self, weak client] bytes in
+        guard let self, let client, self.cloud === client else { return }
+        self.cloudBytes += bytes
+      }
       client.onFailure = { [weak self, weak client] failure in
         guard let self, let client, self.cloud === client else { return }
         self.log.record("cloud", "failed", metrics: ["code": Double(failure.rawValue)])
+        if self.retryCloud(after: failure) { return }
         self.stopSession(reason: "cloud_failed")
-        self.setStatus(failure == .authentication ? "阿里云鉴权失败，请检查北京地域 API Key。" : failure == .quota ? "阿里云额度不足或请求受限，请检查账户。" : "阿里云会话已停止，请检查网络、密钥地域与服务权限。错误代码已写入诊断，可手动重试。")
+        self.setStatus(failure == .authentication ? "阿里云鉴权失败，请检查北京地域 API Key。" : failure == .quota ? "阿里云额度不足或请求受限，请检查账户。" : "翻译连接未能恢复，收音已停止。请检查网络后重新开始。")
       }
       try client.start(key: key, source: selection.source, target: selection.target)
     } catch {
       log.record("cloud", "start_failed"); stopSession(reason: "cloud_start_failed"); setStatus("无法启动阿里云，请检查密钥和语言配置。")
     }
+  }
+  private func retryCloud(after failure: AlibabaProtocol.Failure) -> Bool {
+    guard (failure == .transport || failure == .timeout), running, capture.connected, !testingSample, !finishing,
+          cloudRecoveryAttempts < 3 else { return false }
+    cloudRecoveryAttempts += 1
+    let attempt = cloudRecoveryAttempts, epoch = generation
+    cloud?.stop(); cloud = nil
+    startPending = true
+    setStatus("翻译连接中断，正在重连（\(attempt)/3）…")
+    updateControls()
+    log.record("cloud", "reconnecting", metrics: ["attempt": Double(attempt)])
+    cloudRetryWork?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      guard let self, self.running, self.generation == epoch, self.capture.connected, !self.finishing else { return }
+      self.cloudRetryWork = nil
+      self.connectCloud()
+    }
+    cloudRetryWork = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + Double(attempt), execute: work)
+    return true
   }
   private func updateControls() {
     let busy = running || startPending || downloading
@@ -685,6 +712,7 @@ final class MimiPrototypeController: UIViewController {
       translator = TranslationSession(installedSource: selection.sourceLanguage, target: selection.targetLanguage)
     }
     }
+    cloudRetryWork?.cancel(); cloudRetryWork = nil; cloudRecoveryAttempts = 0
     generation += 1; bindReceiver()
     do {
       if !testingSample { try receiver.start() }
@@ -825,6 +853,7 @@ final class MimiPrototypeController: UIViewController {
     // Save idle state and close the socket before giving up background execution.
     defer { endFinishBackgroundTask() }
     let wasPending = startPending
+    cloudRetryWork?.cancel(); cloudRetryWork = nil; cloudRecoveryAttempts = 0
     endCaptureHandoff()
     broadcastRequested = false; lastPickerRequest = .distantPast
     audioDelivery?.cancel(); audioDelivery = nil; capture.stop()

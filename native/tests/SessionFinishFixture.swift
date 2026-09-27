@@ -30,6 +30,39 @@ import Network
     Task { @MainActor in
       do {
         try await start(controller)
+        let disconnected = sockets.last!
+        disconnected.close()
+        try await wait(timeout: 5) { self.sockets.count == 2 && self.sockets.last!.closed == false }
+        guard !captureClosed, snapshot()["running"] as? Bool == true, button("停止", in: controller.view) != nil else { throw failure("cloud_disconnect_stopped_capture") }
+        try await sendAudio(Data([4, 5, 6, 7]))
+        try await wait { self.sockets.last!.sentAudio == 1 }
+        guard !captureClosed, sockets.last!.sentFinish == 0 else { throw failure("cloud_reconnect_did_not_resume_audio") }
+        try stopSession(controller); try await wait { self.sockets.last!.sentFinish == 1 }
+        sockets.last!.confirmFinish(); try await stopped(controller)
+        results.append("cloud_transport_reconnect_kept_capture")
+
+        try await start(controller)
+        let beforeCancel = sockets.count
+        sockets.last!.close()
+        try await wait { self.button("停止", in: controller.view) != nil }
+        try press("停止", in: controller.view); try await stopped(controller)
+        try await Task.sleep(nanoseconds: 1_300_000_000)
+        guard sockets.count == beforeCancel else { throw failure("manual_stop_did_not_cancel_cloud_retry") }
+        results.append("manual_stop_cancelled_cloud_retry")
+
+        try await start(controller)
+        for retry in 1...3 {
+          let count = sockets.count
+          sockets.last!.close()
+          try await wait(timeout: 6) { self.sockets.count == count + 1 }
+          guard !captureClosed, snapshot()["running"] as? Bool == true else { throw failure("cloud_retry_\(retry)_stopped_capture") }
+        }
+        sockets.last!.close()
+        try await stopped(controller)
+        guard labels(in: controller.view).contains(where: { $0.contains("翻译连接未能恢复") }) else { throw failure("cloud_retry_exhaustion_not_explained") }
+        results.append("cloud_retry_exhaustion_stopped_capture")
+
+        try await start(controller)
         try stopSession(controller)
         // A transport close during finishing must leave the finalization intact.
         connection?.cancel()
@@ -133,6 +166,15 @@ import Network
     try press("停止", in: controller.view)
     let state = snapshot()
     guard tasks.hasFinish, state["captureState"] as? String == "finishing", state["running"] as? Bool == false, state["pip"] as? Bool == false, !sockets.last!.closed else { throw failure("stop_not_bounded_or_snapshot_still_capturing state=\(state) hasFinish=\(tasks.hasFinish) closed=\(sockets.last?.closed ?? true) count=\(sockets.count)") }
+  }
+  private func sendAudio(_ audio: Data) async throws {
+    guard let connection else { throw failure("missing_capture_connection") }
+    let packet = try JSONSerialization.data(withJSONObject: ["key": MimiWire.key, "event": "heartbeat", "audio": audio.base64EncodedString()]) + Data([10])
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      connection.send(content: packet, completion: .contentProcessed { error in
+        if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+      })
+    }
   }
   private func stopped(_ controller: MimiPrototypeController, timeout: Double = 3) async throws {
     try await wait(timeout: timeout) { self.isStopped(controller) && self.captureClosed }
