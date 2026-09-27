@@ -5,13 +5,12 @@
   <p>
     <a href="README.md">English</a>
     · <a href="CONTRIBUTING.md">从源码安装</a>
-    · <a href="docs/acceptance/2026-09-20.md">测试记录</a>
   </p>
 </div>
 
 Osu 将其他 iPhone App 播放的声音识别、翻译成字幕，显示在画中画小窗中。灵感来自桌面端 [Mimi](https://github.com/yuxino/mimi)。
 
-**预览版 · iOS 18+ · 需从源码安装。** 暂未上架 App Store 或 TestFlight。
+**iOS 18+ · 开源 · 使用 Xcode 编译安装。**
 
 <img src="docs/media/caption-style.png" width="640" alt="带有 Osu 头像与字标的字幕样式，当前译文醒目显示">
 
@@ -27,13 +26,34 @@ Osu 将其他 iPhone App 播放的声音识别、翻译成字幕，显示在画�
 
 独立灵动岛字幕模式已下线：iOS 要求前台进程才能启动实时活动，收音扩展永远不满足；扩展也无法查到 App 创建的活动。两种失败均经真机确认，详见[下线报告](docs/dynamic-island-retirement.md)。恢复该模式需要引入 APNs 后端服务。
 
+## 从源码安装
+
+Osu 目前以源码形式提供。下载本仓库，在 Mac 上编译，再通过 Xcode 安装到自己的 iPhone。
+
+需要 **Mac、Xcode、Node.js 22.13+、Ruby/Bundler、Apple 签名团队，以及运行 iOS 18 或更新版本的 iPhone**。
+
+```sh
+git clone https://github.com/yuxino/osu.git
+cd osu
+npm ci
+bundle install
+npm run ios:prebuild
+npm run ios:configure
+cd ios
+bundle exec pod install
+cd ..
+npm run ios:device
+```
+
+首次安装时，用 Xcode 打开 `ios/` 内生成的 `.xcworkspace`。为主 App、**Osu Audio** 广播扩展和 **OsuSubtitles** 小组件扩展选择自己的签名团队，再连接并选择 iPhone。Release 构建会打包 JavaScript，安装后无需一直开着开发服务器。原生项目的详细说明见[构建指南](CONTRIBUTING.md)。
+
 ## 开始使用
 
 1. [编译安装](CONTRIBUTING.md)后，按提示填写阿里云百炼北京地域 API Key，或在设置中选择 Apple 本地模式。
 2. 点「开始听」直接打开系统广播面板，选择「Osu Audio」并确认「开始广播」。
 3. 切回视频 App。在 Osu 里点「停止」即可结束收音。
 
-视频请留在原 App 内播放。若其他 App 的画中画顶掉了 Osu 的字幕窗，收音和翻译会继续，对方小窗关闭后字幕窗自动恢复。开始广播前需关闭 iPhone 镜像。不同 App 的兼容性和长时间后台表现仍在验证。
+视频请留在原 App 内播放。若其他 App 的画中画顶掉了 Osu 的字幕窗，收音和翻译会继续，对方小窗关闭后字幕窗自动恢复。开始广播前需关闭 iPhone 镜像。
 
 ## 隐私
 
